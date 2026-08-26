@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/staff" },
+    { "path": "./apps/customer" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/theme" },
+    { "path": "./packages/types" }
+  ]
+}
