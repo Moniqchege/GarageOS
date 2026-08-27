@@ -45,7 +45,7 @@ export function LaborChargesPage() {
     return (
         <div className="p-6">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold">Labor Charge Catalog</h1>
+                <h1 className="text-2xl font-bold">Service Rate Schedule</h1>
                 <p className="mt-1 text-sm text-[var(--text-muted)]">
                     Define the labor rates this garage charges — used on every job
                     card's labor selector.
@@ -58,7 +58,6 @@ export function LaborChargesPage() {
                     <button className="font-bold underline" onClick={refetch}>retry</button>
                 </div>
             )}
-
             <form
                 onSubmit={(e) => {
                     e.preventDefault();
@@ -73,6 +72,7 @@ export function LaborChargesPage() {
                         placeholder="e.g. Clutch plate replacement"
                     />
                 </Field>
+                
                 <Field label="Category">
                     <Select
                         value={form.category}
@@ -87,20 +87,33 @@ export function LaborChargesPage() {
                     <Input
                         value={form.price}
                         onChange={(e) =>
-                            setForm({ ...form, price: e.target.value.replace(/\D/g, "") })
+                            setForm({
+                                ...form,
+                                price: e.target.value.replace(/\D/g, ""),
+                            })
                         }
                         placeholder="0"
                     />
                 </Field>
-
-                <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={adding}
-                    className="col-span-2 justify-center md:col-span-4"
-                >
-                    <Plus size={14} /> {adding ? "Saving…" : "Add labor charge"}
-                </Button>
+                <div className="col-span-2 flex justify-end gap-2 md:col-span-4">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setForm(emptyForm)}
+                        className="px-14"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="primary"
+                        disabled={adding}
+                        className="px-14"
+                    >
+                        <Plus size={14} />
+                        {adding ? "Saving…" : "Add labor charge"}
+                    </Button>
+                </div>
             </form>
 
             <div className="mb-3 flex items-center gap-2">
@@ -115,7 +128,7 @@ export function LaborChargesPage() {
                         className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                     />
                     <Input
-                        className="w-56 pl-8"
+                        className="!w-150 pl-8"
                         placeholder="Search labor charges"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
@@ -131,7 +144,7 @@ export function LaborChargesPage() {
                 </div>
             ) : (
                 <Table
-                    head={["Code", "Description", "Category", "Charge", ""]}
+                    head={["Code", "Description", "Category", "Charge", "Actions"]}
                     rows={filtered.map((c) => [
                         <span className="font-mono text-[11px] text-[var(--text-muted)]">
                             {c.code}

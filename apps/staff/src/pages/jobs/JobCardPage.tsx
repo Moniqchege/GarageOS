@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ClipboardList, CreditCard, Package, Plus, Receipt as ReceiptIcon, Trash2, Wrench } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, CreditCard, Package, Plus, Receipt as ReceiptIcon, Trash2, Wrench } from "lucide-react";
 
 import { inventory, jobs, labor, useApi, useMutation } from "@garage/api-client";
 import { Badge, Button, Select, Table } from "@garage/ui";
 import type { JobLine } from "@garage/types";
+import { buildJobCheckoutState } from "../../lib/checkout";
 
 const currency = (n: number) => "KSh " + Math.round(n).toLocaleString("en-KE");
 
@@ -37,6 +38,16 @@ export function JobCardPage() {
     const { mutate: removeLine } = useMutation(
         (idx: number) => jobs.removeLine(jobId, idx),
     );
+    // Stage transitions: spares showing up moves a "parts"-stage job back
+    // into "active", and finishing the repair moves it to "done" — both
+    // hand the mechanic back to the bay board, same as the diagnosis flow.
+    const { mutate: setStage, loading: settingStage } = useMutation(
+        (stage: "active" | "done") => jobs.setStage(jobId, stage),
+    );
+    const advanceStage = async (stage: "active" | "done") => {
+        await setStage(stage);
+        navigate("/");
+    };
 
     const mechanics =
         inventoryList
@@ -98,26 +109,11 @@ export function JobCardPage() {
         refetchJob();
     };
 
-    // Default picker values once data arrives
     const defaultLabor = laborPick || (catalog?.[0]?.code ?? "");
     const defaultPart  = partPick  || (inventoryList?.[0]?.sku ?? "");
 
     const goToCheckout = () => {
-        navigate("/pos/checkout", {
-            state: {
-                items: lines.map((l, i) => ({
-                    sku: l.sku ?? `${job.id}-${i}`,
-                    name: l.name,
-                    price: l.price,
-                    qty: 1,
-                })),
-                subtotal: total,
-                vat: total * 0.16,
-                total: total * 1.16,
-                jobId: job.id,
-                registration: job.registration,
-            },
-        });
+        navigate("/pos/checkout", { state: buildJobCheckoutState(job) });
     };
 
     return (
@@ -130,12 +126,34 @@ export function JobCardPage() {
                     <ArrowLeft size={13} /> Back to bay board
                 </Link>
 
-                <Link
-                    to={`/jobs/${job.id}/diagnosis`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-alt)]"
-                >
-                    <ClipboardList size={13} /> Full diagnosis
-                </Link>
+                <div className="flex items-center gap-2">
+                    {job.stage === "parts" && (
+                        <Button
+                            variant="secondary"
+                            onClick={() => advanceStage("active")}
+                            disabled={settingStage}
+                        >
+                            <Wrench size={13} />
+                            {settingStage ? "Updating…" : "Spares available — resume repair"}
+                        </Button>
+                    )}
+                    {job.stage === "active" && (
+                        <Button
+                            variant="secondary"
+                            onClick={() => advanceStage("done")}
+                            disabled={settingStage}
+                        >
+                            <CheckCircle2 size={13} />
+                            {settingStage ? "Updating…" : "Mark ready for pickup"}
+                        </Button>
+                    )}
+                    <Link
+                        to={`/jobs/${job.id}/diagnosis`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-alt)]"
+                    >
+                        <ClipboardList size={13} /> Full diagnosis
+                    </Link>
+                </div>
             </div>
 
             <h1 className="mb-4 text-2xl font-bold">Job card — {job.registration}</h1>

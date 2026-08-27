@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { jobs, useApi } from "@garage/api-client";
 import { Badge, Card } from "@garage/ui";
 import type { JobCard, JobStage } from "@garage/types";
+import { buildJobCheckoutState } from "../../lib/checkout";
 
 const stages: { key: JobStage; label: string }[] = [
     { key: "diagnostics", label: "Awaiting diagnostics" },
@@ -12,6 +13,11 @@ const stages: { key: JobStage; label: string }[] = [
     { key: "parts",       label: "Pending parts"        },
     { key: "done",        label: "Ready for pickup"     },
 ];
+const cardDestination = (job: JobCard): { to: string; state?: unknown } => {
+    if (job.stage === "diagnostics") return { to: `/jobs/${job.id}/diagnosis` };
+    if (job.stage === "done") return { to: "/pos/checkout", state: buildJobCheckoutState(job) };
+    return { to: `/jobs/${job.id}` };
+};
 
 const elapsed = (t: number) => {
     const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
@@ -82,7 +88,7 @@ export function DashboardPage() {
                             <div className="space-y-3">
                                 {col.map((job) => (
                                     <Link
-                                        to={`/jobs/${job.id}`}
+                                        {...cardDestination(job)}
                                         key={job.id}
                                         className="block w-full rounded-xl border border-[var(--border)] p-4 text-left hover:border-[var(--primary)]"
                                     >
