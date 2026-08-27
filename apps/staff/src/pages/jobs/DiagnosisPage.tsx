@@ -30,7 +30,6 @@ export function DiagnosisPage() {
         note: "",
     });
 
-    // Seed local editable state once the job loads
     useEffect(() => {
         if (job) {
             setNotes(job.diagnosisNotes ?? "");

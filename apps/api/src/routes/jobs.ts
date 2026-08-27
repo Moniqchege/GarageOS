@@ -1,119 +1,161 @@
 import { Router } from "express";
-import { jobCards, inventoryItems, settings } from "../store";
+import { prisma } from "../db";
 import type { JobCard, JobDiagnosisFinding, JobLine, JobStage } from "@garage/types";
 
 export const jobsRouter = Router();
 
+const jobInclude = { lines: { orderBy: { position: "asc" as const } } };
+
+function toJobCard(row: Awaited<ReturnType<typeof findJobRow>>) {
+    if (!row) return null;
+    return {
+        ...row,
+        startedAt: Number(row.startedAt),
+        diagnosisFindings: (row.diagnosisFindings as JobDiagnosisFinding[] | null) ?? undefined,
+        diagnosisNotes: row.diagnosisNotes ?? undefined,
+        lines: row.lines.map(({ id: _id, jobId: _jobId, position: _position, ...line }) => line),
+    };
+}
+
+async function findJobRow(id: string) {
+    return prisma.jobCard.findUnique({ where: { id }, include: jobInclude });
+}
+
 // GET /api/jobs?stage=diagnostics
-jobsRouter.get("/", (req, res) => {
+jobsRouter.get("/", async (req, res) => {
     const { stage } = req.query;
-    const result = stage
-        ? jobCards.filter((j) => j.stage === stage)
-        : jobCards;
-    res.json(result);
+    const rows = await prisma.jobCard.findMany({
+        where: stage ? { stage: String(stage) } : undefined,
+        include: jobInclude,
+        orderBy: { startedAt: "desc" },
+    });
+    res.json(rows.map(toJobCard));
 });
 
 // GET /api/jobs/:id
-jobsRouter.get("/:id", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    res.json(job);
+jobsRouter.get("/:id", async (req, res) => {
+    const row = await findJobRow(req.params.id);
+    if (!row) return res.status(404).json({ error: "Job not found" });
+    res.json(toJobCard(row));
 });
 
 // POST /api/jobs  — open a new job card
-jobsRouter.post("/", (req, res) => {
+jobsRouter.post("/", async (req, res) => {
     const { registration, customer, phone, mechanic, faults } = req.body as Partial<JobCard>;
     if (!registration || !customer) {
         return res.status(400).json({ error: "registration and customer are required" });
     }
-    const id = `JC-${1040 + jobCards.length + 1}`;
-    const job: JobCard = {
-        id,
-        registration: String(registration).toUpperCase(),
-        customer: String(customer),
-        phone: String(phone ?? ""),
-        mechanic: String(mechanic ?? ""),
-        stage: "diagnostics",
-        startedAt: Date.now(),
-        faults: String(faults ?? ""),
-        lines: [],
-    };
-    jobCards.unshift(job);
-    res.status(201).json(job);
+    const count = await prisma.jobCard.count();
+    const id = `JC-${1040 + count + 1}`;
+
+    const row = await prisma.jobCard.create({
+        data: {
+            id,
+            registration: String(registration).toUpperCase(),
+            customer: String(customer),
+            phone: String(phone ?? ""),
+            mechanic: String(mechanic ?? ""),
+            stage: "diagnostics",
+            startedAt: Date.now(),
+            faults: String(faults ?? ""),
+        },
+        include: jobInclude,
+    });
+    res.status(201).json(toJobCard(row));
 });
 
 // PATCH /api/jobs/:id  — update faults, mechanic, etc.
-jobsRouter.patch("/:id", (req, res) => {
-    const idx = jobCards.findIndex((j) => j.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Job not found" });
+jobsRouter.patch("/:id", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
+
     const allowed: (keyof JobCard)[] = ["faults", "mechanic", "registration", "customer", "phone"];
+    const data: Record<string, unknown> = {};
     for (const key of allowed) {
-        if (key in req.body) {
-            (jobCards[idx] as unknown as Record<string, unknown>)[key as string] = req.body[key as string];
-        }
+        if (key in req.body) data[key] = req.body[key as string];
     }
-    res.json(jobCards[idx]);
+
+    const row = await prisma.jobCard.update({ where: { id: existing.id }, data, include: jobInclude });
+    res.json(toJobCard(row));
 });
 
 // PATCH /api/jobs/:id/stage
-jobsRouter.patch("/:id/stage", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
+jobsRouter.patch("/:id/stage", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
+
     const validStages: JobStage[] = ["diagnostics", "active", "parts", "done"];
     const { stage } = req.body as { stage: JobStage };
     if (!validStages.includes(stage)) {
         return res.status(400).json({ error: "Invalid stage" });
     }
-    job.stage = stage;
-    res.json(job);
+    const row = await prisma.jobCard.update({ where: { id: existing.id }, data: { stage }, include: jobInclude });
+    res.json(toJobCard(row));
 });
 
 // POST /api/jobs/:id/lines
-jobsRouter.post("/:id/lines", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
+jobsRouter.post("/:id/lines", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id }, include: jobInclude });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
+
     const line = req.body as JobLine;
     if (!line.type || !line.name || line.price == null) {
         return res.status(400).json({ error: "type, name, and price are required" });
     }
-    job.lines = [...(job.lines ?? []), line];
-    res.status(201).json(job);
+    await prisma.jobLine.create({
+        data: {
+            jobId: existing.id,
+            type: line.type,
+            name: line.name,
+            price: line.price,
+            sku: line.sku,
+            position: existing.lines.length,
+        },
+    });
+    const row = await findJobRow(existing.id);
+    res.status(201).json(toJobCard(row));
 });
 
 // DELETE /api/jobs/:id/lines/:lineIdx
-jobsRouter.delete("/:id/lines/:lineIdx", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
+jobsRouter.delete("/:id/lines/:lineIdx", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id }, include: jobInclude });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
+
     const idx = Number(req.params.lineIdx);
-    if (isNaN(idx) || idx < 0 || idx >= (job.lines?.length ?? 0)) {
+    if (isNaN(idx) || idx < 0 || idx >= existing.lines.length) {
         return res.status(400).json({ error: "Invalid line index" });
     }
-    job.lines = job.lines!.filter((_: unknown, i: number) => i !== idx);
-    res.json(job);
+    await prisma.jobLine.delete({ where: { id: existing.lines[idx].id } });
+
+    const row = await findJobRow(existing.id);
+    res.json(toJobCard(row));
 });
 
 // PATCH /api/jobs/:id/diagnosis — save mechanic notes + findings, separate
 // from the customer-reported fault text captured at intake
-jobsRouter.patch("/:id/diagnosis", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
+jobsRouter.patch("/:id/diagnosis", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
 
     const { notes, findings } = req.body as {
         notes?: string;
         findings?: JobDiagnosisFinding[];
     };
-    if (notes !== undefined) job.diagnosisNotes = String(notes);
-    if (findings !== undefined) job.diagnosisFindings = findings;
+    const data: Record<string, unknown> = {};
+    if (notes !== undefined) data.diagnosisNotes = String(notes);
+    if (findings !== undefined) data.diagnosisFindings = findings;
 
-    res.json(job);
+    const row = await prisma.jobCard.update({ where: { id: existing.id }, data, include: jobInclude });
+    res.json(toJobCard(row));
 });
 
 // POST /api/jobs/:id/close
-jobsRouter.post("/:id/close", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    job.stage = "done";
-    res.json(job);
+jobsRouter.post("/:id/close", async (req, res) => {
+    const existing = await prisma.jobCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Job not found" });
+
+    const row = await prisma.jobCard.update({ where: { id: existing.id }, data: { stage: "done" }, include: jobInclude });
+    res.json(toJobCard(row));
 });
 
 // POST /api/jobs/:id/checkout — settle a job card's line items and close it
@@ -123,11 +165,11 @@ interface JobCheckoutBody {
     mpesaRef?: string;
 }
 
-jobsRouter.post("/:id/checkout", (req, res) => {
-    const job = jobCards.find((j) => j.id === req.params.id);
+jobsRouter.post("/:id/checkout", async (req, res) => {
+    const job = await prisma.jobCard.findUnique({ where: { id: req.params.id }, include: jobInclude });
     if (!job) return res.status(404).json({ error: "Job not found" });
 
-    const lines = job.lines ?? [];
+    const lines = job.lines;
     if (lines.length === 0) {
         return res.status(400).json({ error: "Job card has no line items" });
     }
@@ -140,8 +182,11 @@ jobsRouter.post("/:id/checkout", (req, res) => {
         return res.status(400).json({ error: "A valid M-Pesa reference is required" });
     }
 
+    const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
+    const vatRate = settings?.vatRate ?? 16;
+
     const subtotal = lines.reduce((s, l) => s + l.price, 0);
-    const vat = Math.round(subtotal * (settings.vatRate / 100));
+    const vat = Math.round(subtotal * (vatRate / 100));
     const total = subtotal + vat;
 
     const change =
@@ -152,8 +197,10 @@ jobsRouter.post("/:id/checkout", (req, res) => {
     // Deduct any part lines that reference real inventory SKUs
     for (const line of lines) {
         if (line.type === "part" && line.sku) {
-            const item = inventoryItems.find((i) => i.sku === line.sku);
-            if (item && item.qty > 0) item.qty -= 1;
+            const item = await prisma.inventoryItem.findUnique({ where: { sku: line.sku } });
+            if (item && item.qty > 0) {
+                await prisma.inventoryItem.update({ where: { sku: item.sku }, data: { qty: { decrement: 1 } } });
+            }
         }
     }
 
@@ -171,12 +218,12 @@ jobsRouter.post("/:id/checkout", (req, res) => {
         method,
         mpesaRef: mpesaRef ?? null,
         change,
-        vatReg: settings.kra,
+        vatReg: settings?.kra ?? "",
         paidAt: new Date().toISOString(),
         jobId: job.id,
         registration: job.registration,
     };
 
-    job.stage = "done";
+    await prisma.jobCard.update({ where: { id: job.id }, data: { stage: "done" } });
     res.status(201).json(receipt);
 });

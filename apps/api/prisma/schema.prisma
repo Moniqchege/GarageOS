@@ -1,0 +1,156 @@
+// GarageOS database schema.
+//
+// This mirrors the shapes in packages/types/src/index.ts and the mock data
+// that used to live in apps/api/src/store.ts. Each model maps 1:1 onto one
+// of the old in-memory arrays so the migration is mechanical and easy to
+// audit against the original mock data in prisma/seed.ts.
+//
+// Not persisted on purpose: the POS cart (apps/api/src/store.ts `posCart`).
+// It's single-cashier, single-session state that resets on checkout/clear,
+// so it stays in-memory rather than round-tripping to MySQL on every click.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─── Employees ─────────────────────────────────────────────────────────────
+
+model Employee {
+  id        String @id @db.VarChar(20)
+  name      String
+  role      String
+  phone     String
+  pin       String @db.VarChar(4)
+  status    String @default("Active") @db.VarChar(20) // "Active" | "Suspended"
+  lastLogin String @map("last_login")
+
+  @@map("employees")
+}
+
+// ─── Inventory ───────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  sku   String @id @db.VarChar(20)
+  name  String
+  fits  String
+  cost  Int
+  price Int
+  qty   Int
+  low   Int
+  added String @db.VarChar(20)
+
+  @@map("inventory_items")
+}
+
+// ─── Labor catalog ────────────────────────────────────────────────────────────
+
+model LaborCharge {
+  code     String @id @db.VarChar(20)
+  name     String
+  category String
+  price    Int
+
+  @@map("labor_charges")
+}
+
+// ─── Job cards ───────────────────────────────────────────────────────────────
+
+model JobCard {
+  id                String           @id @db.VarChar(20)
+  registration      String           @db.VarChar(20)
+  customer          String
+  phone             String
+  mechanic          String
+  stage             String           @default("diagnostics") @db.VarChar(20) // JobStage
+  startedAt         BigInt           @map("started_at")
+  faults            String           @db.Text
+  diagnosisNotes    String?          @map("diagnosis_notes") @db.Text
+  // Findings are always replaced wholesale via PATCH /:id/diagnosis, so a
+  // JSON column matches that write pattern better than a child table.
+  diagnosisFindings Json?            @map("diagnosis_findings")
+  lines             JobLine[]
+
+  @@index([registration])
+  @@index([stage])
+  @@map("job_cards")
+}
+
+model JobLine {
+  id       Int     @id @default(autoincrement())
+  jobId    String  @map("job_id") @db.VarChar(20)
+  job      JobCard @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  type     String  @db.VarChar(10) // "labor" | "part"
+  name     String
+  price    Int
+  sku      String?
+  position Int     @default(0) // preserves array order for indexed delete
+
+  @@index([jobId])
+  @@map("job_lines")
+}
+
+// ─── Customers — staff roster view ───────────────────────────────────────────
+
+model VehicleRecord {
+  registration    String @id @db.VarChar(20)
+  customer        String
+  phone           String
+  model           String
+  mileage         Int
+  lastService     String @map("last_service") @db.VarChar(20)
+  nextServiceKm   Int    @map("next_service_km")
+  nextServiceDate String @map("next_service_date") @db.VarChar(20)
+
+  @@map("vehicle_records")
+}
+
+// ─── Customers — full detail view (customer-app) ─────────────────────────────
+
+model CustomerVehicle {
+  registration    String @id @db.VarChar(20)
+  model           String
+  year            Int
+  color           String
+  mileage         Int
+  health          Int
+  fuel            Int
+  lastService     String @map("last_service") @db.VarChar(20)
+  nextServiceDate String @map("next_service_date") @db.VarChar(20)
+  nextServiceKm   Int    @map("next_service_km")
+  // activeJob / diagnostics / history are nested read-only structures with
+  // no dedicated CRUD endpoints today — JSON keeps the shape identical to
+  // packages/types CustomerActiveJob / DiagnosticFinding / ServiceHistoryEntry.
+  activeJob       Json?  @map("active_job")
+  diagnostics     Json
+  history         Json
+
+  @@map("customer_vehicles")
+}
+
+// ─── Customer notifications ───────────────────────────────────────────────────
+
+model CustomerNotification {
+  id    Int     @id @default(autoincrement())
+  type  String  @db.VarChar(20) // "job" | "reminder" | "promo" | "invoice"
+  read  Boolean @default(false)
+  time  String  @db.VarChar(40)
+  title String
+  body  String  @db.Text
+
+  @@map("customer_notifications")
+}
+
+// ─── Business settings (singleton row, id always 1) ───────────────────────────
+
+model BusinessSettings {
+  id      Int    @id @default(1)
+  name    String
+  kra     String @db.VarChar(20)
+  vatRate Int    @map("vat_rate")
+
+  @@map("business_settings")
+}

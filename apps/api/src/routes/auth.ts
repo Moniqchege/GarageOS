@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { employees, settings } from "../store";
+import { prisma } from "../db";
 
 export const authRouter = Router();
 
@@ -9,14 +9,14 @@ export const authRouter = Router();
  * Returns the matched employee (no PIN in response) + business settings.
  * No JWT yet — the front-end stores the returned user object in memory/sessionStorage.
  */
-authRouter.post("/login", (req, res) => {
+authRouter.post("/login", async (req, res) => {
     const { pin } = req.body as { pin?: string };
 
     if (!pin || String(pin).length !== 4) {
         return res.status(400).json({ error: "A 4-digit PIN is required" });
     }
 
-    const emp = employees.find((e) => e.pin === String(pin));
+    const emp = await prisma.employee.findFirst({ where: { pin: String(pin) } });
 
     if (!emp) {
         return res.status(401).json({ error: "Incorrect PIN" });
@@ -26,12 +26,19 @@ authRouter.post("/login", (req, res) => {
     }
 
     // Update last-login timestamp
-    emp.lastLogin = new Date().toLocaleTimeString("en-KE", {
-        hour: "2-digit",
-        minute: "2-digit",
+    const updated = await prisma.employee.update({
+        where: { id: emp.id },
+        data: {
+            lastLogin: new Date().toLocaleTimeString("en-KE", {
+                hour: "2-digit",
+                minute: "2-digit",
+            }),
+        },
     });
 
-    const { pin: _pin, ...safeEmp } = emp;
+    const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
+
+    const { pin: _pin, ...safeEmp } = updated;
     res.json({ user: safeEmp, settings });
 });
 

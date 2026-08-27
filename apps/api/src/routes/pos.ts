@@ -1,33 +1,44 @@
 import { Router } from "express";
-import { clearCart, inventoryItems, posCart, settings } from "../store";
-import type { CartLine } from "../store";
+import { prisma } from "../db";
 
 export const posRouter = Router();
 
+// ─── Cart (server-side session state — single cashier MVP) ───────────────────
+// Deliberately NOT persisted to MySQL: it's ephemeral, single-session state
+// that's cleared on checkout/cancel. Inventory itself (the thing that
+// matters after the sale) lives in MySQL and is updated below.
+export interface CartLine {
+    sku: string;
+    name: string;
+    price: number;
+    qty: number;
+}
+let posCart: CartLine[] = [];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function cartSummary() {
+async function cartSummary() {
+    const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
+    const vatRate = settings?.vatRate ?? 16;
     const subtotal = posCart.reduce((s, c) => s + c.price * c.qty, 0);
-    const vat = Math.round(subtotal * (settings.vatRate / 100));
+    const vat = Math.round(subtotal * (vatRate / 100));
     const total = subtotal + vat;
-    return { items: posCart, subtotal, vat, total };
+    return { items: posCart, subtotal, vat, total, vatReg: settings?.kra ?? "" };
 }
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 
 // GET /api/pos/cart
-posRouter.get("/cart", (_req, res) => {
-    res.json(cartSummary());
+posRouter.get("/cart", async (_req, res) => {
+    res.json(await cartSummary());
 });
 
 // POST /api/pos/cart/items  — { sku, qty }
-posRouter.post("/cart/items", (req, res) => {
+posRouter.post("/cart/items", async (req, res) => {
     const { sku, qty = 1 } = req.body as { sku?: string; qty?: number };
     if (!sku) return res.status(400).json({ error: "sku is required" });
 
-    const item = inventoryItems.find(
-        (i) => i.sku.toLowerCase() === String(sku).toLowerCase(),
-    );
+    const item = await prisma.inventoryItem.findUnique({ where: { sku: String(sku).toUpperCase() } });
     if (!item) return res.status(404).json({ error: "Item not found" });
 
     const addQty = Number(qty);
@@ -36,7 +47,7 @@ posRouter.post("/cart/items", (req, res) => {
     }
 
     // Deduct from inventory
-    item.qty -= addQty;
+    await prisma.inventoryItem.update({ where: { sku: item.sku }, data: { qty: { decrement: addQty } } });
 
     // Update or add cart line
     const existing = posCart.find((c) => c.sku === item.sku);
@@ -46,11 +57,11 @@ posRouter.post("/cart/items", (req, res) => {
         posCart.push({ sku: item.sku, name: item.name, price: item.price, qty: addQty });
     }
 
-    res.status(201).json(cartSummary());
+    res.status(201).json(await cartSummary());
 });
 
 // PATCH /api/pos/cart/items/:sku  — { qty }  (absolute new qty, not delta)
-posRouter.patch("/cart/items/:sku", (req, res) => {
+posRouter.patch("/cart/items/:sku", async (req, res) => {
     const line = posCart.find(
         (c) => c.sku.toLowerCase() === req.params.sku.toLowerCase(),
     );
@@ -61,16 +72,15 @@ posRouter.patch("/cart/items/:sku", (req, res) => {
         return res.status(400).json({ error: "qty must be a non-negative number" });
     }
 
-    const item = inventoryItems.find((i) => i.sku === line.sku);
+    const item = await prisma.inventoryItem.findUnique({ where: { sku: line.sku } });
     if (!item) return res.status(404).json({ error: "Inventory item not found" });
 
     // Restore the old qty back to inventory, then deduct the new qty
-    item.qty += line.qty;
-    if (item.qty < newQty) {
-        item.qty -= 0; // rollback
-        return res.status(409).json({ error: `Only ${item.qty} units in stock` });
+    const restored = item.qty + line.qty;
+    if (restored < newQty) {
+        return res.status(409).json({ error: `Only ${restored} units in stock` });
     }
-    item.qty -= newQty;
+    await prisma.inventoryItem.update({ where: { sku: item.sku }, data: { qty: restored - newQty } });
 
     if (newQty === 0) {
         const idx = posCart.indexOf(line);
@@ -79,21 +89,21 @@ posRouter.patch("/cart/items/:sku", (req, res) => {
         line.qty = newQty;
     }
 
-    res.json(cartSummary());
+    res.json(await cartSummary());
 });
 
 // DELETE /api/pos/cart/items/:sku  — remove line and restore inventory
-posRouter.delete("/cart/items/:sku", (req, res) => {
+posRouter.delete("/cart/items/:sku", async (req, res) => {
     const idx = posCart.findIndex(
         (c) => c.sku.toLowerCase() === req.params.sku.toLowerCase(),
     );
     if (idx === -1) return res.status(404).json({ error: "Item not in cart" });
 
     const [removed] = posCart.splice(idx, 1);
-    const item = inventoryItems.find((i) => i.sku === removed.sku);
-    if (item) item.qty += removed.qty;
+    const item = await prisma.inventoryItem.findUnique({ where: { sku: removed.sku } });
+    if (item) await prisma.inventoryItem.update({ where: { sku: item.sku }, data: { qty: { increment: removed.qty } } });
 
-    res.json(cartSummary());
+    res.json(await cartSummary());
 });
 
 // ─── Checkout ─────────────────────────────────────────────────────────────────
@@ -105,7 +115,7 @@ interface CheckoutBody {
 }
 
 // POST /api/pos/checkout
-posRouter.post("/checkout", (req, res) => {
+posRouter.post("/checkout", async (req, res) => {
     if (posCart.length === 0) {
         return res.status(400).json({ error: "Cart is empty" });
     }
@@ -118,7 +128,7 @@ posRouter.post("/checkout", (req, res) => {
         return res.status(400).json({ error: "A valid M-Pesa reference is required" });
     }
 
-    const { items, subtotal, vat, total } = cartSummary();
+    const { items, subtotal, vat, total, vatReg } = await cartSummary();
 
     const change =
         method === "cash" && amountTendered != null
@@ -127,18 +137,18 @@ posRouter.post("/checkout", (req, res) => {
 
     const receipt = {
         id: "INV-" + (4000 + Math.floor(Math.random() * 900)),
-        items: items.map((l: CartLine) => ({ ...l })), // snapshot
+        items: items.map((l) => ({ ...l })), // snapshot
         subtotal,
         vat,
         total,
         method,
         mpesaRef: mpesaRef ?? null,
         change,
-        vatReg: settings.kra,
+        vatReg,
         paidAt: new Date().toISOString(),
     };
 
-    clearCart();
+    posCart = [];
     res.status(201).json(receipt);
 });
 
@@ -150,12 +160,12 @@ posRouter.get("/receipts/:id", (req, res) => {
 });
 
 // POST /api/pos/cart/clear  — cancel sale and restore inventory
-posRouter.post("/cart/clear", (_req, res) => {
+posRouter.post("/cart/clear", async (_req, res) => {
     // Restore all cart quantities back to inventory
     for (const line of posCart) {
-        const item = inventoryItems.find((i) => i.sku === line.sku);
-        if (item) item.qty += line.qty;
+        const item = await prisma.inventoryItem.findUnique({ where: { sku: line.sku } });
+        if (item) await prisma.inventoryItem.update({ where: { sku: item.sku }, data: { qty: { increment: line.qty } } });
     }
-    clearCart();
-    res.json(cartSummary());
+    posCart = [];
+    res.json(await cartSummary());
 });
