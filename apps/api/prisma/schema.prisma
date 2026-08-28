@@ -1,14 +1,3 @@
-// GarageOS database schema.
-//
-// This mirrors the shapes in packages/types/src/index.ts and the mock data
-// that used to live in apps/api/src/store.ts. Each model maps 1:1 onto one
-// of the old in-memory arrays so the migration is mechanical and easy to
-// audit against the original mock data in prisma/seed.ts.
-//
-// Not persisted on purpose: the POS cart (apps/api/src/store.ts `posCart`).
-// It's single-cashier, single-session state that resets on checkout/clear,
-// so it stays in-memory rather than round-tripping to MySQL on every click.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -17,22 +6,20 @@ datasource db {
   provider = "mysql"
 }
 
-// ─── Employees ─────────────────────────────────────────────────────────────
-
+// Employees
 model Employee {
   id        String @id @db.VarChar(20)
   name      String
   role      String
   phone     String
   pin       String @db.VarChar(4)
-  status    String @default("Active") @db.VarChar(20) // "Active" | "Suspended"
+  status    String @default("Active") @db.VarChar(20)
   lastLogin String @map("last_login")
 
   @@map("employees")
 }
 
-// ─── Inventory ───────────────────────────────────────────────────────────────
-
+// Inventory 
 model InventoryItem {
   sku   String @id @db.VarChar(20)
   name  String
@@ -46,8 +33,7 @@ model InventoryItem {
   @@map("inventory_items")
 }
 
-// ─── Labor catalog ────────────────────────────────────────────────────────────
-
+// Labor catalog 
 model LaborCharge {
   code     String @id @db.VarChar(20)
   name     String
@@ -57,95 +43,115 @@ model LaborCharge {
   @@map("labor_charges")
 }
 
-// ─── Job cards ───────────────────────────────────────────────────────────────
-
+// Job cards 
 model JobCard {
-  id                String           @id @db.VarChar(20)
-  registration      String           @db.VarChar(20)
-  customer          String
-  phone             String
-  mechanic          String
-  stage             String           @default("diagnostics") @db.VarChar(20) // JobStage
-  startedAt         BigInt           @map("started_at")
-  faults            String           @db.Text
-  diagnosisNotes    String?          @map("diagnosis_notes") @db.Text
-  // Findings are always replaced wholesale via PATCH /:id/diagnosis, so a
-  // JSON column matches that write pattern better than a child table.
-  diagnosisFindings Json?            @map("diagnosis_findings")
-  lines             JobLine[]
+  id String @id @db.VarChar(20)
+
+  registration String @db.VarChar(20)
+  vehicle      Vehicle @relation(fields: [registration], references: [registration], onDelete: Restrict)
+
+  mechanic String
+  stage    String @default("diagnostics") @db.VarChar(20)
+
+  startedAt   BigInt  @map("started_at")
+  completedAt BigInt? @map("completed_at")
+
+  mileageAtStart Int? @map("mileage_at_start")
+  mileageAtEnd   Int? @map("mileage_at_end")
+
+  faults           String  @db.Text
+  diagnosisNotes   String? @map("diagnosis_notes") @db.Text
+  diagnosisFindings Json?  @map("diagnosis_findings")
+
+  lines JobLine[]
 
   @@index([registration])
   @@index([stage])
+  @@index([completedAt])
   @@map("job_cards")
 }
 
 model JobLine {
-  id       Int     @id @default(autoincrement())
-  jobId    String  @map("job_id") @db.VarChar(20)
-  job      JobCard @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  type     String  @db.VarChar(10) // "labor" | "part"
+  id Int @id @default(autoincrement())
+
+  jobId String  @map("job_id") @db.VarChar(20)
+  job   JobCard @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  type     String @db.VarChar(10)
   name     String
   price    Int
   sku      String?
-  position Int     @default(0) // preserves array order for indexed delete
+  position Int    @default(0)
 
   @@index([jobId])
   @@map("job_lines")
 }
 
-// ─── Customers — staff roster view ───────────────────────────────────────────
+// Vehicles 
+model Vehicle {
+  registration String @id @db.VarChar(20)
 
-model VehicleRecord {
-  registration    String @id @db.VarChar(20)
-  customer        String
-  phone           String
-  model           String
-  mileage         Int
-  lastService     String @map("last_service") @db.VarChar(20)
-  nextServiceKm   Int    @map("next_service_km")
-  nextServiceDate String @map("next_service_date") @db.VarChar(20)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
-  @@map("vehicle_records")
+  model   String
+  year    Int?
+  color   String?
+  mileage Int @default(0)
+  fuel    Int?
+  health  Int?
+
+  nextServiceKm   Int?
+  nextServiceDate DateTime?
+
+  jobCards JobCard[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("vehicles")
 }
 
-// ─── Customers — full detail view (customer-app) ─────────────────────────────
+// Customers
+model Customer {
+  id    String  @id @default(cuid())
+  name  String
+  phone String
+  email String?
 
-model CustomerVehicle {
-  registration    String @id @db.VarChar(20)
-  model           String
-  year            Int
-  color           String
-  mileage         Int
-  health          Int
-  fuel            Int
-  lastService     String @map("last_service") @db.VarChar(20)
-  nextServiceDate String @map("next_service_date") @db.VarChar(20)
-  nextServiceKm   Int    @map("next_service_km")
-  // activeJob / diagnostics / history are nested read-only structures with
-  // no dedicated CRUD endpoints today — JSON keeps the shape identical to
-  // packages/types CustomerActiveJob / DiagnosticFinding / ServiceHistoryEntry.
-  activeJob       Json?  @map("active_job")
-  diagnostics     Json
-  history         Json
+  vehicles Vehicle[]
 
-  @@map("customer_vehicles")
+  notifications CustomerNotification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+  @@map("customers")
 }
 
-// ─── Customer notifications ───────────────────────────────────────────────────
-
+// Customer notifications 
 model CustomerNotification {
-  id    Int     @id @default(autoincrement())
-  type  String  @db.VarChar(20) // "job" | "reminder" | "promo" | "invoice"
-  read  Boolean @default(false)
-  time  String  @db.VarChar(40)
-  title String
-  body  String  @db.Text
+  id         Int      @id @default(autoincrement())
 
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  type       String   @db.VarChar(20)
+  read       Boolean  @default(false)
+  time       String   @db.VarChar(40)
+  title      String
+  body       String   @db.Text
+
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+  @@index([customerId, read])
   @@map("customer_notifications")
 }
 
-// ─── Business settings (singleton row, id always 1) ───────────────────────────
-
+// Business settings 
 model BusinessSettings {
   id      Int    @id @default(1)
   name    String

@@ -1,5 +1,5 @@
 import { del, get, patch, post } from "../http";
-import type { JobCard, JobDiagnosisFinding, JobLine, JobStage } from "@garage/types";
+import type { JobCard, JobCreatePayload, JobDiagnosisFinding, JobLine, JobStage } from "@garage/types";
 import type { CheckoutPayload, Receipt } from "./pos";
 
 export const jobs = {
@@ -9,7 +9,7 @@ export const jobs = {
     get: (id: string) =>
         get<JobCard>(`/api/jobs/${id}`),
 
-    create: (data: Omit<JobCard, "id" | "stage" | "startedAt" | "lines">) =>
+    create: (data: JobCreatePayload) =>
         post<JobCard>("/api/jobs", data),
 
     update: (id: string, data: Partial<JobCard>) =>
@@ -29,9 +29,12 @@ export const jobs = {
         data: { notes?: string; findings?: JobDiagnosisFinding[] },
     ) => patch<JobCard>(`/api/jobs/${id}/diagnosis`, data),
 
-    close: (id: string) =>
-        post<JobCard>(`/api/jobs/${id}/close`),
+    close: (id: string, payload?: { mileageAtEnd?: number }) =>
+        post<JobCard>(`/api/jobs/${id}/close`, payload ?? {}),
 
     checkout: (id: string, payload: CheckoutPayload) =>
         post<Receipt>(`/api/jobs/${id}/checkout`, payload),
+
+    complete: (id: string, payload: { mileage: number }) =>
+        post<JobCard>(`/api/jobs/${id}/close`, { mileageAtEnd: payload.mileage }),
 };

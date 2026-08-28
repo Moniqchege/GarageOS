@@ -86,11 +86,11 @@ export function DiagnosisPage() {
                     Full diagnosis — {job.registration}
                 </h1>
                 <Link
-                    to={`/jobs/${jobId}`}
+                    to={`/`}
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--primary)] px-3 py-2 text-sm font-semibold text-[var(--text-muted)] transition-colors hover:bg-[var(--primary-dim)]"
                 >
                     <ArrowLeft size={13} />
-                    Back to job card
+                    Back to Bay Board
                 </Link>
             </div>
             <p className="mb-5 text-sm text-[var(--text-muted)]">

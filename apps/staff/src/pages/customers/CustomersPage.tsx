@@ -31,16 +31,16 @@ export function CustomersPage() {
         <div className="p-6">
             <div className="mb-6 flex items-start justify-between">
                 <div>
-                    <h1 className="text-xl font-bold">Customers &amp; Vehicle History</h1>
+                    <h1 className="text-xl font-bold">Repair &amp; Service Dossier</h1>
                     <p className="mt-1 text-sm text-[var(--text-muted)]">
                         Vehicle roster and service due dates.
                     </p>
                 </div>
                 <Link
-                    to="/intake"
+                    to="/vehicles/register"
                     className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white"
                 >
-                    <Plus size={14} /> New intake
+                    <Plus size={14} /> Register New Vehicle
                 </Link>
             </div>
 

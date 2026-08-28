@@ -13,6 +13,7 @@ import { AnalyticsPage } from "../pages/analytics/AnalyticsPage";
 import { SettingsPage } from "../pages/settings/SettingsPage";
 import { JobCardPage } from "../pages/jobs/JobCardPage";
 import { DiagnosisPage } from "../pages/jobs/DiagnosisPage";
+import { VehicleRegistrationPage } from "../pages/intake/VehicleRegistrationPage";
 
 export const router = createBrowserRouter([
     {
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
             { path: "settings", element: <SettingsPage /> },
             { path: "jobs/:jobId", element: <JobCardPage /> },
             { path: "jobs/:jobId/diagnosis", element: <DiagnosisPage /> },
+            { path: "vehicles/register", element: <VehicleRegistrationPage /> },
         ],
     },
 ]);

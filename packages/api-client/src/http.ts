@@ -1,6 +1,3 @@
-/** Base URL is injected at build time via VITE_API_URL (front-end apps)
- *  or falls back to localhost:4000 for local development.
- */
 const _meta = import.meta as unknown as { env?: Record<string, string> };
 const BASE_URL = _meta.env?.VITE_API_URL ?? "http://localhost:4000";
 
