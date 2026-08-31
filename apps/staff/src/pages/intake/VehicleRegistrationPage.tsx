@@ -26,10 +26,8 @@ export function VehicleRegistrationPage() {
         customer: "",
         phone: "",
         email: "",
-        lastServiceDate: "",
         lastServiceKm: "",
-        nextServiceDate: "",
-        nextServiceKm: "",
+        serviceIntervalKm: "",
     });
 
     const canSubmit =
@@ -48,6 +46,10 @@ export function VehicleRegistrationPage() {
             customerName: form.customer,
             phone: form.phone,
             email: form.email || undefined,
+            lastServiceKm: form.lastServiceKm ? Number(form.lastServiceKm) : undefined,
+            serviceIntervalKm: form.serviceIntervalKm
+                ? Number(form.serviceIntervalKm)
+                : undefined,
         });
 
         if (vehicle) {
@@ -135,45 +137,34 @@ export function VehicleRegistrationPage() {
                         </Field>
                     </div>
 
-                   
-
                     <div className="mt-4 grid grid-cols-2 gap-3">
-    <Field label="Last serviced on">
-        <Input
-            type="date"
-            value={form.lastServiceDate}
-            onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })}
-        />
-    </Field>
-    <Field label="Last serviced at (km)">
-        <Input
-            value={form.lastServiceKm}
-            onChange={(e) =>
-                setForm({ ...form, lastServiceKm: e.target.value.replace(/\D/g, "") })
-            }
-            placeholder="e.g. 80000"
-        />
-    </Field>
-</div>
-<div className="mt-4 grid grid-cols-2 gap-3">
-    <Field label="Next service due">
-        <Input
-            type="date"
-            value={form.nextServiceDate}
-            onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })}
-        />
-    </Field>
-    <Field label="Next service due at (km)">
-        <Input
-            value={form.nextServiceKm}
-            onChange={(e) =>
-                setForm({ ...form, nextServiceKm: e.target.value.replace(/\D/g, "") })
-            }
-            placeholder="e.g. 85000"
-        />
-    </Field>
+                        <Field label="Last serviced at (km)">
+                            <Input
+                                value={form.lastServiceKm}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        lastServiceKm: e.target.value.replace(/\D/g, ""),
+                                    })
+                                }
+                                placeholder="e.g. 80000"
+                            />
+                        </Field>
+                        <Field label="Service interval (km)">
+                            <Input
+                                value={form.serviceIntervalKm}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        serviceIntervalKm: e.target.value.replace(/\D/g, ""),
+                                    })
+                                }
+                                placeholder="e.g. 5000"
+                            />
+                        </Field>
                     </div>
-                     <Field label="Mileage (km)" className="mt-4">
+
+                    <Field label="Mileage (km)" className="mt-4">
                         <div className="relative">
                             <Gauge
                                 size={14}

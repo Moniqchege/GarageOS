@@ -1,5 +1,7 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
+import { computeNextServiceKm } from "../lib/serviceSchedule";
 import type {
     JobCard as JobCardType,
     JobDiagnosisFinding,
@@ -99,6 +101,50 @@ async function generateJobId() {
     return `JC-${1041 + count}`;
 }
 
+// Recalculates a vehicle's service schedule after a job completes and
+// fires a customer notification with the next due mileage. Used by every
+// route that can mark a job "done" (stage change, close, checkout) so
+// there's a single source of truth for the recalculation + notification.
+async function completeVehicleService(
+    tx: Prisma.TransactionClient,
+    registration: string,
+    mileageAtEnd: number,
+) {
+    const vehicle = await tx.vehicle.findUnique({
+        where: { registration },
+    });
+
+    if (!vehicle) return;
+
+    const nextServiceKm = computeNextServiceKm(
+        mileageAtEnd,
+        vehicle.serviceIntervalKm,
+    );
+
+    await tx.vehicle.update({
+        where: { registration },
+        data: {
+            mileage: mileageAtEnd,
+            lastServiceKm: mileageAtEnd,
+            nextServiceKm,
+        },
+    });
+
+    if (nextServiceKm != null) {
+        await tx.customerNotification.create({
+            data: {
+                customerId: vehicle.customerId,
+                type: "service_due",
+                time: new Date().toISOString(),
+                title: "Next service reminder",
+                body: `Your vehicle ${registration} is due for its next service at ${nextServiceKm.toLocaleString(
+                    "en-KE",
+                )} km.`,
+            },
+        });
+    }
+}
+
 // GET /api/jobs
 jobsRouter.get("/", async (req, res) => {
     try {
@@ -173,8 +219,8 @@ jobsRouter.post("/", async (req, res) => {
             mileageAtStart,
             fuel,
         } = req.body as Partial<JobCardType> & {
-                mileageAtStart?: number;
-                fuel?: number;
+            mileageAtStart?: number;
+            fuel?: number;
         };
 
         if (!registration) {
@@ -314,10 +360,7 @@ jobsRouter.patch("/:id", async (req, res) => {
             "mileageAtEnd",
         ];
 
-        const data: Record<
-            string,
-            unknown
-        > = {};
+        const data: Record<string, unknown> = {};
 
         for (const key of allowed) {
             if (
@@ -444,20 +487,10 @@ jobsRouter.patch(
                             mileageAtEnd !=
                             null
                         ) {
-                            await tx.vehicle.update(
-                                {
-                                    where: {
-                                        registration:
-                                            existing.registration,
-                                    },
-
-                                    data: {
-                                        mileage:
-                                            Number(
-                                                mileageAtEnd,
-                                            ),
-                                    },
-                                },
+                            await completeVehicleService(
+                                tx,
+                                existing.registration,
+                                Number(mileageAtEnd),
                             );
                         }
 
@@ -667,10 +700,7 @@ jobsRouter.patch(
                     findings?: JobDiagnosisFinding[];
                 };
 
-            const data: Record<
-                string,
-                unknown
-            > = {};
+            const data: Record<string, unknown> = {};
 
             if (
                 notes !== undefined
@@ -779,20 +809,10 @@ jobsRouter.post(
                             mileageAtEnd !=
                             null
                         ) {
-                            await tx.vehicle.update(
-                                {
-                                    where: {
-                                        registration:
-                                            existing.registration,
-                                    },
-
-                                    data: {
-                                        mileage:
-                                            Number(
-                                                mileageAtEnd,
-                                            ),
-                                    },
-                                },
+                            await completeVehicleService(
+                                tx,
+                                existing.registration,
+                                Number(mileageAtEnd),
                             );
                         }
 

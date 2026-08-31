@@ -210,6 +210,18 @@ export function JobCardPage() {
         }
     }, [job]);
 
+    useEffect(() => {
+        if (!laborPick && catalog?.length) {
+            setLaborPick(catalog[0].code);
+        }
+    }, [catalog, laborPick]);
+
+    useEffect(() => {
+        if (!partPick && inventoryList?.length) {
+            setPartPick(inventoryList[0].sku);
+        }
+    }, [inventoryList, partPick]);
+
     // ---------------------------------------------------------------------
     // Mechanics
     // ---------------------------------------------------------------------
@@ -345,58 +357,91 @@ export function JobCardPage() {
 
     const currentVehicle = job.vehicle;
 
-    const defaultLabor =
-        laborPick ||
-        catalog?.[0]?.code ||
-        "";
-
-    const defaultPart =
-        partPick ||
-        inventoryList?.[0]?.sku ||
-        "";
+    const defaultLabor = laborPick;
+    const defaultPart = partPick;
 
     // ---------------------------------------------------------------------
     // Handlers
     // ---------------------------------------------------------------------
 
     const handleAddLabor = async () => {
+        const selectedCode = laborPick || catalog?.[0]?.code;
+
+        if (!selectedCode) {
+            window.alert("Please select a labor charge.");
+            return;
+        }
         const entry = (catalog ?? []).find(
-            (item) => item.code === laborPick,
+            (item) => item.code === selectedCode,
         );
+        
+        if (!entry) {
+            window.alert("Selected labor charge was not found.");
+            return;
+        }
 
-        if (!entry) return;
+        try {
+            await addLine({
+                type: "labor",
+                name: entry.name,
+                price: Number(entry.price),
+            });
 
-        await addLine({
-            type: "labor",
-            name: entry.name,
-            price: entry.price,
-        });
+            await refetchJob();
+        } catch (error) {
+            console.error("Failed to add labor:", error);
 
-        await refetchJob();
+            window.alert(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to add labor charge.",
+            );
+        }
     };
 
     const handleAddPart = async () => {
+        const selectedSku =
+            partPick || inventoryList?.[0]?.sku;
+
+        if (!selectedSku) {
+            window.alert("Please select a part.");
+            return;
+        }
+
         const part = (inventoryList ?? []).find(
-            (item) => item.sku === partPick,
+            (item) => item.sku === selectedSku,
         );
 
-        if (!part) return;
+        if (!part) {
+            window.alert("Selected part was not found.");
+            return;
+        }
 
-        if (part.qty <= 0) {
+        if (Number(part.qty) <= 0) {
             window.alert(
                 `${part.name} is currently out of stock.`,
             );
             return;
         }
 
-        await addLine({
-            type: "part",
-            name: part.name,
-            price: part.price,
-            sku: part.sku,
-        });
+        try {
+            await addLine({
+                type: "part",
+                name: part.name,
+                price: Number(part.price),
+                sku: part.sku,
+            });
 
-        await refetchJob();
+            await refetchJob();
+        } catch (error) {
+            console.error("Failed to add part:", error);
+
+            window.alert(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to add part.",
+            );
+        }
     };
 
     const handleRemoveLine = async (
@@ -1039,36 +1084,19 @@ export function JobCardPage() {
                     <div className="flex gap-2">
 
                         <Select
-                            value={
-                                defaultLabor
-                            }
+                            value={laborPick}
                             onChange={(event) =>
-                                setLaborPick(
-                                    event.target
-                                        .value,
-                                )
+                                setLaborPick(event.target.value)
                             }
                         >
-                            {(catalog ?? []).map(
-                                (item) => (
-                                    <option
-                                        key={
-                                            item.code
-                                        }
-                                        value={
-                                            item.code
-                                        }
-                                    >
-                                        {
-                                            item.name
-                                        }{" "}
-                                        —{" "}
-                                        {currency(
-                                            item.price,
-                                        )}
-                                    </option>
-                                ),
-                            )}
+                            {(catalog ?? []).map((item) => (
+                                <option
+                                    key={item.code}
+                                    value={item.code}
+                                >
+                                    {item.name} — {currency(item.price)}
+                                </option>
+                            ))}
                         </Select>
 
                         <Button
@@ -1104,42 +1132,20 @@ export function JobCardPage() {
                     <div className="flex gap-2">
 
                         <Select
-                            value={
-                                defaultPart
-                            }
+                            value={partPick}
                             onChange={(event) =>
-                                setPartPick(
-                                    event.target
-                                        .value,
-                                )
+                                setPartPick(event.target.value)
                             }
                         >
-                            {(inventoryList ??
-                                []).map(
-                                (item) => (
-                                    <option
-                                        key={
-                                            item.sku
-                                        }
-                                        value={
-                                            item.sku
-                                        }
-                                    >
-                                        {
-                                            item.name
-                                        }{" "}
-                                        —{" "}
-                                        {currency(
-                                            item.price,
-                                        )}{" "}
-                                        (
-                                        {
-                                            item.qty
-                                        }{" "}
-                                        in stock)
-                                    </option>
-                                ),
-                            )}
+                            {(inventoryList ?? []).map((item) => (
+                                <option
+                                    key={item.sku}
+                                    value={item.sku}
+                                >
+                                    {item.name} — {currency(item.price)} (
+                                    {item.qty} in stock)
+                                </option>
+                            ))}
                         </Select>
 
                         <Button

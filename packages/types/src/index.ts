@@ -90,7 +90,7 @@ export interface CustomerVehicleRecord {
     phone: string;
     model: string;
     mileage: number;
-    lastService: string;
+    lastServiceKm: number;
     nextServiceKm: number;
     nextServiceDate: string;
 }
@@ -149,6 +149,7 @@ export interface VehicleRegistrationPayload {
     fuel?: number;
     lastServiceKm?: number;
     nextServiceKm?: number;
+    serviceIntervalKm?: number;
 }
 
 export interface ServiceInfoPayload {

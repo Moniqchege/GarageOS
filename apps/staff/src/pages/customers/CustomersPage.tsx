@@ -7,13 +7,11 @@ import { Badge, Input, Table } from "@garage/ui";
 import type { CustomerVehicleRecord } from "@garage/types";
 
 const dueSoon = (c: CustomerVehicleRecord) => {
-    const match = c.nextServiceDate.match(/(\d+) (\w+) (\d+)/);
-    if (!match) return false;
-    const [, day, month, year] = match;
-    const daysLeft = Math.ceil(
-        (new Date(`${month} ${day}, ${year}`).getTime() - Date.now()) / 86400000,
-    );
-    return daysLeft <= 21;
+    if (c.nextServiceKm == null) return false;
+
+    const remainingKm = c.nextServiceKm - c.mileage;
+
+    return remainingKm <= 500;
 };
 
 export function CustomersPage() {
@@ -77,27 +75,40 @@ export function CustomersPage() {
                     ))}
                 </div>
             ) : (
-                <Table
-                    head={["Reg plate", "Customer", "Vehicle", "Mileage", "Last service", "Next service", ""]}
-                    rows={filtered.map((c) => [
-                        <span className="font-mono font-bold text-[var(--primary)]">{c.registration}</span>,
-                        <div>
-                            <div>{c.customer}</div>
-                            <div className="text-[10px] text-[var(--text-faint)]">{c.phone}</div>
-                        </div>,
-                        c.model,
-                        <span className="font-mono">{c.mileage.toLocaleString()} km</span>,
-                        c.lastService,
-                        <div>
-                            <div>{c.nextServiceDate}</div>
-                            <div className="text-[10px] text-[var(--text-faint)]">
-                                at {c.nextServiceKm.toLocaleString()} km
-                            </div>
-                        </div>,
-                        dueSoon(c)
-                            ? <Badge variant="warning">Due soon</Badge>
-                            : <Badge variant="success">On track</Badge>,
-                    ])}
+                    <Table
+                        head={[
+                            "Reg plate",
+                            "Customer",
+                            "Vehicle",
+                            "Mileage",
+                            "Last service",
+                            "Next service",
+                            "",
+                        ]}
+                        rows={filtered.map((c) => [
+                            <span className="font-mono font-bold text-[var(--primary)]">
+                                {c.registration}
+                            </span>,
+                            <div>
+                                <div>{c.customer}</div>
+                                <div className="text-[10px] text-[var(--text-faint)]">
+                                    {c.phone}
+                                </div>
+                            </div>,
+                            c.model,
+                            <span className="font-mono">
+                                {c.mileage.toLocaleString()} km
+                            </span>,
+                            <span className="font-mono">
+                                {c.lastServiceKm.toLocaleString()} km
+                            </span>,
+                            <span className="font-mono">
+                                {c.nextServiceKm.toLocaleString()} km
+                            </span>,
+                            dueSoon(c)
+                                ? <Badge variant="warning">Due soon</Badge>
+                                : <Badge variant="success">On track</Badge>,
+                        ])}
                 />
             )}
         </div>

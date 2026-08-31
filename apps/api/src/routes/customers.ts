@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
+import { computeNextServiceKm } from "../lib/serviceSchedule";
 
 export const customersRouter = Router();
 
@@ -93,14 +94,9 @@ customersRouter.get("/", async (_req, res) => {
                 fuel: vehicle.fuel,
                 health: vehicle.health,
 
-                lastService: vehicle.lastServiceDate
-                    ? vehicle.lastServiceDate.toISOString()
-                    : null,
                 lastServiceKm: vehicle.lastServiceKm,
+                serviceIntervalKm: vehicle.serviceIntervalKm,
                 nextServiceKm: vehicle.nextServiceKm,
-                nextServiceDate: vehicle.nextServiceDate
-                    ? vehicle.nextServiceDate.toISOString()
-                    : null,
             })),
         }));
 
@@ -190,7 +186,6 @@ customersRouter.get("/search", async (req, res) => {
                     color: vehicle.color,
                     mileage: vehicle.mileage,
                     nextServiceKm: vehicle.nextServiceKm,
-                    nextServiceDate: vehicle.nextServiceDate,
 
                     lastJob: vehicle.jobCards[0]
                         ? {
@@ -338,8 +333,9 @@ customersRouter.get(
                     mileage: vehicle.mileage,
                     fuel: vehicle.fuel,
                     health: vehicle.health,
+                    lastServiceKm: vehicle.lastServiceKm,
+                    serviceIntervalKm: vehicle.serviceIntervalKm,
                     nextServiceKm: vehicle.nextServiceKm,
-                    nextServiceDate: vehicle.nextServiceDate,
                 },
 
                 summary: {
@@ -433,6 +429,9 @@ customersRouter.get(
                     mileage: vehicle.mileage,
                     fuel: vehicle.fuel,
                     health: vehicle.health,
+                    lastServiceKm: vehicle.lastServiceKm,
+                    serviceIntervalKm: vehicle.serviceIntervalKm,
+                    nextServiceKm: vehicle.nextServiceKm,
                 },
 
                 serviceSummary: {
@@ -508,8 +507,8 @@ customersRouter.post("/:id/vehicles", async (req, res) => {
             mileage,
             fuel,
             health,
-            nextServiceKm,
-            nextServiceDate,
+            lastServiceKm,
+            serviceIntervalKm,
         } = req.body;
 
         if (!registration || !model) {
@@ -549,6 +548,12 @@ customersRouter.post("/:id/vehicles", async (req, res) => {
             });
         }
 
+        const normalizedLastServiceKm =
+            lastServiceKm != null ? Number(lastServiceKm) : null;
+
+        const normalizedServiceIntervalKm =
+            serviceIntervalKm != null ? Number(serviceIntervalKm) : null;
+
         const vehicle = await prisma.vehicle.create({
             data: {
                 registration: normalizedRegistration,
@@ -574,14 +579,12 @@ customersRouter.post("/:id/vehicles", async (req, res) => {
                     health != null
                         ? Number(health)
                         : null,
-                nextServiceKm:
-                    nextServiceKm != null
-                        ? Number(nextServiceKm)
-                        : null,
-                nextServiceDate:
-                    nextServiceDate
-                        ? new Date(nextServiceDate)
-                        : null,
+                lastServiceKm: normalizedLastServiceKm,
+                serviceIntervalKm: normalizedServiceIntervalKm,
+                nextServiceKm: computeNextServiceKm(
+                    normalizedLastServiceKm,
+                    normalizedServiceIntervalKm,
+                ),
             },
         });
 
@@ -611,10 +614,8 @@ customersRouter.post("/register-vehicle", async (req, res) => {
             color,
             mileage,
             fuel,
-            lastServiceDate,
             lastServiceKm,
-            nextServiceKm,
-            nextServiceDate,
+            serviceIntervalKm,
         } = req.body as {
             customerName?: string;
             phone?: string;
@@ -625,10 +626,8 @@ customersRouter.post("/register-vehicle", async (req, res) => {
             color?: string;
             mileage?: number;
             fuel?: number;
-            lastServiceDate?: string;
             lastServiceKm?: number;
-            nextServiceKm?: number;
-            nextServiceDate?: string;
+            serviceIntervalKm?: number;
         };
 
         if (!customerName || !phone || !registration || !model) {
@@ -649,6 +648,12 @@ customersRouter.post("/register-vehicle", async (req, res) => {
                 error: "A vehicle with this registration already exists",
             });
         }
+
+        const normalizedLastServiceKm =
+            lastServiceKm != null ? Number(lastServiceKm) : null;
+
+        const normalizedServiceIntervalKm =
+            serviceIntervalKm != null ? Number(serviceIntervalKm) : null;
 
         const vehicle = await prisma.$transaction(async (tx) => {
             let customer = await tx.customer.findFirst({
@@ -674,10 +679,12 @@ customersRouter.post("/register-vehicle", async (req, res) => {
                     color: color != null ? String(color) : null,
                     mileage: mileage != null ? Number(mileage) : 0,
                     fuel: fuel != null ? Number(fuel) : null,
-                    lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : null,
-                    lastServiceKm: lastServiceKm != null ? Number(lastServiceKm) : null,
-                    nextServiceKm: nextServiceKm != null ? Number(nextServiceKm) : null,
-                    nextServiceDate: nextServiceDate ? new Date(nextServiceDate) : null,
+                    lastServiceKm: normalizedLastServiceKm,
+                    serviceIntervalKm: normalizedServiceIntervalKm,
+                    nextServiceKm: computeNextServiceKm(
+                        normalizedLastServiceKm,
+                        normalizedServiceIntervalKm,
+                    ),
                 },
                 include: { customer: true },
             });
@@ -837,32 +844,32 @@ customersRouter.patch("/vehicles/:registration/service-info", async (req, res) =
         }
 
         const {
-            lastServiceDate,
             lastServiceKm,
-            nextServiceKm,
-            nextServiceDate,
+            serviceIntervalKm,
         } = req.body as {
-            lastServiceDate?: string;
             lastServiceKm?: number;
-            nextServiceKm?: number;
-            nextServiceDate?: string;
+            serviceIntervalKm?: number;
         };
+
+        const nextLastServiceKm =
+            lastServiceKm !== undefined
+                ? (lastServiceKm != null ? Number(lastServiceKm) : null)
+                : existing.lastServiceKm;
+
+        const nextServiceIntervalKm =
+            serviceIntervalKm !== undefined
+                ? (serviceIntervalKm != null ? Number(serviceIntervalKm) : null)
+                : existing.serviceIntervalKm;
 
         const vehicle = await prisma.vehicle.update({
             where: { registration },
             data: {
-                ...(lastServiceDate !== undefined
-                    ? { lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : null }
-                    : {}),
-                ...(lastServiceKm !== undefined
-                    ? { lastServiceKm: lastServiceKm != null ? Number(lastServiceKm) : null }
-                    : {}),
-                ...(nextServiceKm !== undefined
-                    ? { nextServiceKm: nextServiceKm != null ? Number(nextServiceKm) : null }
-                    : {}),
-                ...(nextServiceDate !== undefined
-                    ? { nextServiceDate: nextServiceDate ? new Date(nextServiceDate) : null }
-                    : {}),
+                lastServiceKm: nextLastServiceKm,
+                serviceIntervalKm: nextServiceIntervalKm,
+                nextServiceKm: computeNextServiceKm(
+                    nextLastServiceKm,
+                    nextServiceIntervalKm,
+                ),
             },
         });
 

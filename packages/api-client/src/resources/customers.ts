@@ -29,7 +29,7 @@ interface CustomerRosterEntry {
         registration: string;
         model: string;
         mileage: number;
-        lastService: number | null;
+        lastServiceKm: number | null;
         nextServiceKm: number | null;
         nextServiceDate: string | null;
     }>;
@@ -53,7 +53,7 @@ export const customers = {
                 phone: customer.phone,
                 model: vehicle.model,
                 mileage: vehicle.mileage,
-                lastService: formatDate(vehicle.lastService),
+                lastServiceKm: vehicle.lastServiceKm ?? 0,
                 nextServiceKm: vehicle.nextServiceKm ?? 0,
                 nextServiceDate: formatDate(vehicle.nextServiceDate),
             })),
