@@ -26,6 +26,10 @@ export function VehicleRegistrationPage() {
         customer: "",
         phone: "",
         email: "",
+        lastServiceDate: "",
+        lastServiceKm: "",
+        nextServiceDate: "",
+        nextServiceKm: "",
     });
 
     const canSubmit =
@@ -131,7 +135,45 @@ export function VehicleRegistrationPage() {
                         </Field>
                     </div>
 
-                    <Field label="Mileage (km)" className="mt-4">
+                   
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+    <Field label="Last serviced on">
+        <Input
+            type="date"
+            value={form.lastServiceDate}
+            onChange={(e) => setForm({ ...form, lastServiceDate: e.target.value })}
+        />
+    </Field>
+    <Field label="Last serviced at (km)">
+        <Input
+            value={form.lastServiceKm}
+            onChange={(e) =>
+                setForm({ ...form, lastServiceKm: e.target.value.replace(/\D/g, "") })
+            }
+            placeholder="e.g. 80000"
+        />
+    </Field>
+</div>
+<div className="mt-4 grid grid-cols-2 gap-3">
+    <Field label="Next service due">
+        <Input
+            type="date"
+            value={form.nextServiceDate}
+            onChange={(e) => setForm({ ...form, nextServiceDate: e.target.value })}
+        />
+    </Field>
+    <Field label="Next service due at (km)">
+        <Input
+            value={form.nextServiceKm}
+            onChange={(e) =>
+                setForm({ ...form, nextServiceKm: e.target.value.replace(/\D/g, "") })
+            }
+            placeholder="e.g. 85000"
+        />
+    </Field>
+                    </div>
+                     <Field label="Mileage (km)" className="mt-4">
                         <div className="relative">
                             <Gauge
                                 size={14}
@@ -145,40 +187,6 @@ export function VehicleRegistrationPage() {
                                 }
                                 placeholder="e.g. 84200"
                             />
-                        </div>
-                    </Field>
-
-                    <Field
-                        label={
-                            <span className="flex items-center gap-1">
-                                <Fuel size={11} /> Fuel status
-                            </span>
-                        }
-                        className="mt-5"
-                    >
-                        <div className="px-1">
-                            <input
-                                type="range"
-                                min={0}
-                                max={4}
-                                value={form.fuel}
-                                onChange={(e) => setForm({ ...form, fuel: Number(e.target.value) })}
-                                className="w-full accent-[var(--primary)]"
-                            />
-                            <div className="mt-1 flex justify-between text-[11px] text-[var(--text-muted)]">
-                                {fuelLabels.map((label, index) => (
-                                    <span
-                                        key={label}
-                                        className={
-                                            form.fuel === index
-                                                ? "font-bold text-[var(--primary)]"
-                                                : ""
-                                        }
-                                    >
-                                        {label}
-                                    </span>
-                                ))}
-                            </div>
                         </div>
                     </Field>
                 </Card>

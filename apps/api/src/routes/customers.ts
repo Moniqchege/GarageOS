@@ -72,22 +72,10 @@ customersRouter.get("/", async (_req, res) => {
         const customers = await prisma.customer.findMany({
             include: {
                 vehicles: {
-                    orderBy: {
-                        registration: "asc",
-                    },
-                    include: {
-                        jobCards: {
-                            orderBy: {
-                                startedAt: "desc",
-                            },
-                            take: 1,
-                        },
-                    },
+                    orderBy: { registration: "asc" },
                 },
             },
-            orderBy: {
-                name: "asc",
-            },
+            orderBy: { name: "asc" },
         });
 
         const result = customers.map((customer) => ({
@@ -104,22 +92,15 @@ customersRouter.get("/", async (_req, res) => {
                 mileage: vehicle.mileage,
                 fuel: vehicle.fuel,
                 health: vehicle.health,
+
+                lastService: vehicle.lastServiceDate
+                    ? vehicle.lastServiceDate.toISOString()
+                    : null,
+                lastServiceKm: vehicle.lastServiceKm,
                 nextServiceKm: vehicle.nextServiceKm,
-                nextServiceDate: vehicle.nextServiceDate,
-
-                lastService:
-                    vehicle.jobCards[0]?.completedAt
-                        ? Number(vehicle.jobCards[0].completedAt)
-                        : null,
-
-                activeJob:
-                    vehicle.jobCards[0] &&
-                        vehicle.jobCards[0].stage !== "done"
-                        ? {
-                            id: vehicle.jobCards[0].id,
-                            stage: vehicle.jobCards[0].stage,
-                        }
-                        : null,
+                nextServiceDate: vehicle.nextServiceDate
+                    ? vehicle.nextServiceDate.toISOString()
+                    : null,
             })),
         }));
 
@@ -630,6 +611,10 @@ customersRouter.post("/register-vehicle", async (req, res) => {
             color,
             mileage,
             fuel,
+            lastServiceDate,
+            lastServiceKm,
+            nextServiceKm,
+            nextServiceDate,
         } = req.body as {
             customerName?: string;
             phone?: string;
@@ -640,6 +625,10 @@ customersRouter.post("/register-vehicle", async (req, res) => {
             color?: string;
             mileage?: number;
             fuel?: number;
+            lastServiceDate?: string;
+            lastServiceKm?: number;
+            nextServiceKm?: number;
+            nextServiceDate?: string;
         };
 
         if (!customerName || !phone || !registration || !model) {
@@ -685,6 +674,10 @@ customersRouter.post("/register-vehicle", async (req, res) => {
                     color: color != null ? String(color) : null,
                     mileage: mileage != null ? Number(mileage) : 0,
                     fuel: fuel != null ? Number(fuel) : null,
+                    lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : null,
+                    lastServiceKm: lastServiceKm != null ? Number(lastServiceKm) : null,
+                    nextServiceKm: nextServiceKm != null ? Number(nextServiceKm) : null,
+                    nextServiceDate: nextServiceDate ? new Date(nextServiceDate) : null,
                 },
                 include: { customer: true },
             });
@@ -831,3 +824,51 @@ customersRouter.patch(
         }
     },
 );
+
+// PATCH /api/customers/vehicles/:registration/service-info
+customersRouter.patch("/vehicles/:registration/service-info", async (req, res) => {
+    try {
+        const registration = req.params.registration.toUpperCase();
+
+        const existing = await prisma.vehicle.findUnique({ where: { registration } });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Vehicle not found" });
+        }
+
+        const {
+            lastServiceDate,
+            lastServiceKm,
+            nextServiceKm,
+            nextServiceDate,
+        } = req.body as {
+            lastServiceDate?: string;
+            lastServiceKm?: number;
+            nextServiceKm?: number;
+            nextServiceDate?: string;
+        };
+
+        const vehicle = await prisma.vehicle.update({
+            where: { registration },
+            data: {
+                ...(lastServiceDate !== undefined
+                    ? { lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : null }
+                    : {}),
+                ...(lastServiceKm !== undefined
+                    ? { lastServiceKm: lastServiceKm != null ? Number(lastServiceKm) : null }
+                    : {}),
+                ...(nextServiceKm !== undefined
+                    ? { nextServiceKm: nextServiceKm != null ? Number(nextServiceKm) : null }
+                    : {}),
+                ...(nextServiceDate !== undefined
+                    ? { nextServiceDate: nextServiceDate ? new Date(nextServiceDate) : null }
+                    : {}),
+            },
+        });
+
+        res.json(vehicle);
+    } catch (error) {
+        console.error("PATCH service-info failed:", error);
+        res.status(500).json({ error: "Failed to update service info" });
+    }
+});

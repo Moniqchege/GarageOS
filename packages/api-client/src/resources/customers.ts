@@ -4,6 +4,7 @@ import type {
     CustomerVehicle,
     CustomerVehicleRecord,
     ServiceHistoryJob,
+    ServiceInfoPayload,
     VehicleRegistrationPayload,
     VehicleSearchResult,
 } from "@garage/types";
@@ -103,7 +104,13 @@ export const customers = {
         get<ServiceHistoryJob[]>(
             `/api/customers/vehicles/${encodeURIComponent(registration)}/history`,
         ),
-    
+
     registerVehicle: (payload: VehicleRegistrationPayload) =>
         post<CustomerVehicle>("/api/customers/register-vehicle", payload),
+
+    updateServiceInfo: (registration: string, payload: ServiceInfoPayload) =>
+        patch<CustomerVehicle>(
+            `/api/customers/vehicles/${encodeURIComponent(registration)}/service-info`,
+            payload,
+        ),
 };

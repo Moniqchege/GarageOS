@@ -23,8 +23,8 @@ export interface Vehicle {
 
     customer?: Customer;
 
+    lastServiceKm?: number;
     nextServiceKm?: number;
-    nextServiceDate?: string;
 }
 
 export interface JobLine {
@@ -147,4 +147,11 @@ export interface VehicleRegistrationPayload {
     color?: string;
     mileage?: number;
     fuel?: number;
+    lastServiceKm?: number;
+    nextServiceKm?: number;
+}
+
+export interface ServiceInfoPayload {
+    lastServiceKm?: number;
+    nextServiceKm?: number;
 }

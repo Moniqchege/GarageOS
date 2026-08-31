@@ -101,8 +101,9 @@ model Vehicle {
   fuel    Int?
   health  Int?
 
+  lastServiceKm   Int?      @map("last_service_km")
   nextServiceKm   Int?
-  nextServiceDate DateTime?
+
 
   jobCards JobCard[]
 
