@@ -12,8 +12,12 @@ export const inventory = {
     get: (sku: string) =>
         get<InventoryItem>(`/api/inventory/${sku}`),
 
-    create: (data: InventoryItem) =>
+    // SKU is always assigned by the backend — never pass one in.
+    create: (data: Omit<InventoryItem, "sku">) =>
         post<InventoryItem>("/api/inventory", data),
+
+    nextSku: () =>
+        get<{ sku: string }>("/api/inventory/next-sku"),
 
     update: (sku: string, data: Partial<InventoryItem>) =>
         patch<InventoryItem>(`/api/inventory/${sku}`, data),

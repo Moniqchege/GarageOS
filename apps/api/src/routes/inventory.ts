@@ -4,6 +4,28 @@ import type { InventoryItem } from "@garage/types";
 
 export const inventoryRouter = Router();
 
+const SKU_PREFIX = "PT";
+
+async function generateSku(): Promise<string> {
+    const last = await prisma.inventoryItem.findFirst({
+        where: { sku: { startsWith: `${SKU_PREFIX}-` } },
+        orderBy: { sku: "desc" },
+    });
+
+    let next = 1;
+    if (last) {
+        const match = last.sku.match(/(\d+)$/);
+        if (match) next = parseInt(match[1], 10) + 1;
+    }
+
+    return `${SKU_PREFIX}-${String(next).padStart(5, "0")}`;
+}
+
+inventoryRouter.get("/next-sku", async (_req, res) => {
+    const sku = await generateSku();
+    res.json({ sku });
+});
+
 // GET /api/inventory?low=true
 inventoryRouter.get("/", async (req, res) => {
     const items = await prisma.inventoryItem.findMany({
@@ -24,33 +46,38 @@ inventoryRouter.get("/:sku", async (req, res) => {
     res.json(item);
 });
 
-// POST /api/inventory  — add new item
+// POST /api/inventory 
 inventoryRouter.post("/", async (req, res) => {
     const body = req.body as Partial<InventoryItem>;
-    if (!body.sku || !body.name) {
-        return res.status(400).json({ error: "sku and name are required" });
+    if (!body.name) {
+        return res.status(400).json({ error: "name is required" });
     }
-    const sku = String(body.sku).toUpperCase();
 
-    const exists = await prisma.inventoryItem.findUnique({ where: { sku } });
-    if (exists) return res.status(409).json({ error: "SKU already exists" });
+    const data = {
+        name: String(body.name),
+        fits: String(body.fits ?? "Universal"),
+        cost: Number(body.cost ?? 0),
+        price: Number(body.price ?? 0),
+        qty: Number(body.qty ?? 0),
+        low: Number(body.low ?? 5),
+        added: new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short" }),
+    };
 
-    const item = await prisma.inventoryItem.create({
-        data: {
-            sku,
-            name: String(body.name),
-            fits: String(body.fits ?? "Universal"),
-            cost: Number(body.cost ?? 0),
-            price: Number(body.price ?? 0),
-            qty: Number(body.qty ?? 0),
-            low: Number(body.low ?? 5),
-            added: new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short" }),
-        },
-    });
-    res.status(201).json(item);
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const sku = await generateSku();
+        try {
+            const item = await prisma.inventoryItem.create({ data: { sku, ...data } });
+            return res.status(201).json(item);
+        } catch (err: any) {
+            if (err?.code === "P2002") continue;
+            throw err;
+        }
+    }
+
+    res.status(500).json({ error: "Could not generate a unique SKU, please retry" });
 });
 
-// PATCH /api/inventory/:sku  — update item details or quantity (restock inline)
+// PATCH /api/inventory/:sku
 inventoryRouter.patch("/:sku", async (req, res) => {
     const existing = await prisma.inventoryItem.findUnique({ where: { sku: req.params.sku.toUpperCase() } });
     if (!existing) return res.status(404).json({ error: "Item not found" });
@@ -61,14 +88,11 @@ inventoryRouter.patch("/:sku", async (req, res) => {
         if (key in req.body) data[key] = req.body[key as string];
     }
 
-    const item = await prisma.inventoryItem.update({
-        where: { sku: existing.sku },
-        data,
-    });
+    const item = await prisma.inventoryItem.update({ where: { sku: existing.sku }, data });
     res.json(item);
 });
 
-// POST /api/inventory/:sku/restock  — { qty: number }
+// POST /api/inventory/:sku/restock — { qty: number }
 inventoryRouter.post("/:sku/restock", async (req, res) => {
     const existing = await prisma.inventoryItem.findUnique({ where: { sku: req.params.sku.toUpperCase() } });
     if (!existing) return res.status(404).json({ error: "Item not found" });

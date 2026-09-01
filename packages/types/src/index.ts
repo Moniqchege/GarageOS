@@ -157,3 +157,14 @@ export interface ServiceInfoPayload {
     lastServiceKm?: number;
     nextServiceKm?: number;
 }
+
+export interface InventoryItem {
+    sku: string;
+    name: string;
+    fits: string;
+    cost: number;
+    price: number;
+    qty: number;
+    low: number;
+    added: string;
+}
