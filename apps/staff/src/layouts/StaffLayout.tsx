@@ -31,19 +31,22 @@ const navigation: NavigationGroup[] = [
         items: [
             {
                 label: "Bay board",
-                title: "Live Workshop Operations",
+                // title: "Live Workshop Operations",
+                title: "",
                 path: "/",
                 icon: LayoutGrid,
             },
             {
                 label: "Vehicles",
-                title: "Vehicle Reception & Intake",
+                // title: "Vehicle Reception & Intake",
+                title: "",
                 path: "/intake",
                 icon: Car,
             },
             {
                 label: "Customers",
-                title: "Customers & Vehicle History",
+                // title: "Customers & Vehicle History",
+                title: "",
                 path: "/customers",
                 icon: Users,
             },
@@ -54,31 +57,36 @@ const navigation: NavigationGroup[] = [
         items: [
             {
                 label: "Inventory",
-                title: "Master Warehouse Stock Ingestion",
+                // title: "Master Warehouse Stock Ingestion",
+                title: "",
                 path: "/stock",
                 icon: Package,
             },
             {
                 label: "Labor",
-                title: "Labor Charge Catalog",
+                // title: "Labor Charge Catalog",
+                title: "",
                 path: "/labor",
                 icon: Wrench,
             },
             {
                 label: "Sales",
-                title: "Retail Spare Parts Counter",
+                // title: "Retail Spare Parts Counter",
+                title: "",
                 path: "/pos",
                 icon: ShoppingCart,
             },
             {
                 label: "Team",
-                title: "Staff Profiles & Permission Matrix",
+                // title: "Staff Profiles & Permission Matrix",
+                title: "",
                 path: "/users",
                 icon: Users,
             },
             {
                 label: "Reports",
-                title: "Executive Financial Analytics",
+                // title: "Executive Financial Analytics",
+                title: "",
                 path: "/analytics",
                 icon: BarChart3,
             },
@@ -89,7 +97,8 @@ const navigation: NavigationGroup[] = [
         items: [
             {
                 label: "Settings",
-                title: "Settings",
+                // title: "Settings",
+                title: "",
                 path: "/settings",
                 icon: Settings,
             },

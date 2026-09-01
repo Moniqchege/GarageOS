@@ -37,4 +37,7 @@ export const jobs = {
 
     complete: (id: string, payload: { mileage: number }) =>
         post<JobCard>(`/api/jobs/${id}/close`, { mileageAtEnd: payload.mileage }),
+
+    markReady: (id: string, payload?: { mileageAtEnd?: number }) =>
+        patch<JobCard>(`/api/jobs/${id}/stage`, { stage: "ready", ...payload }),
 };

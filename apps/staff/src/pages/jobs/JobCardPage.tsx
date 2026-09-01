@@ -78,10 +78,7 @@ export function JobCardPage() {
     const { jobId = "" } = useParams();
     const navigate = useNavigate();
 
-    // ---------------------------------------------------------------------
     // Current job
-    // ---------------------------------------------------------------------
-
     const {
         data: job,
         loading: jobLoading,
@@ -92,10 +89,7 @@ export function JobCardPage() {
         [jobId],
     );
 
-    // ---------------------------------------------------------------------
     // Catalogues
-    // ---------------------------------------------------------------------
-
     const { data: catalog } = useApi(
         () => labor.list(),
         [],
@@ -111,10 +105,7 @@ export function JobCardPage() {
         [],
     );
 
-    // ---------------------------------------------------------------------
     // Vehicle history
-    // ---------------------------------------------------------------------
-
     const {
         data: vehicleHistory,
         loading: historyLoading,
@@ -127,10 +118,7 @@ export function JobCardPage() {
         [job?.registration],
     );
 
-    // ---------------------------------------------------------------------
     // Local state
-    // ---------------------------------------------------------------------
-
     const [laborPick, setLaborPick] = useState("");
     const [partPick, setPartPick] = useState("");
 
@@ -151,10 +139,7 @@ export function JobCardPage() {
     const [searchError, setSearchError] =
         useState<string | null>(null);
 
-    // ---------------------------------------------------------------------
     // Mutations
-    // ---------------------------------------------------------------------
-
     const { mutate: updateMechanic } = useMutation(
         (mechanic: string) =>
             jobs.update(jobId, { mechanic }),
@@ -181,18 +166,39 @@ export function JobCardPage() {
             jobs.setStage(jobId, stage),
     );
 
-    const {
-        mutate: completeJob,
-        loading: completingJob,
-    } = useMutation(
-        (mileage: number) =>
-            jobs.complete(jobId, { mileage }),
+    // const {
+    //     mutate: completeJob,
+    //     loading: completingJob,
+    // } = useMutation(
+    //     (mileage: number) =>
+    //         jobs.complete(jobId, { mileage }),
+    // );
+
+    const { mutate: markReady, loading: markingReady } = useMutation(
+        (mileage: number) => jobs.markReady(jobId, { mileageAtEnd: mileage }),
     );
 
-    // ---------------------------------------------------------------------
-    // Initialize final mileage
-    // ---------------------------------------------------------------------
+    const handleMarkReady = async () => {
+        const mileage = Number(finalMileage);
 
+        if (!Number.isFinite(mileage) || mileage < 0) {
+            window.alert("Please enter a valid final mileage.");
+            return;
+        }
+
+        const currentMileage = currentVehicle?.mileage ?? 0;
+        if (currentMileage > 0 && mileage < currentMileage) {
+            window.alert(
+                `Final mileage cannot be lower than the current vehicle mileage of ${currentMileage.toLocaleString("en-KE")} km.`,
+            );
+            return;
+        }
+
+        await markReady(mileage);
+        await refetchJob();
+    };
+
+    // Initialize final mileage
     useEffect(() => {
         if (!job) return;
 
@@ -222,10 +228,7 @@ export function JobCardPage() {
         }
     }, [inventoryList, partPick]);
 
-    // ---------------------------------------------------------------------
     // Mechanics
-    // ---------------------------------------------------------------------
-
     const mechanicOptions = useMemo(
         () =>
             (users ?? [])
@@ -238,10 +241,7 @@ export function JobCardPage() {
         [users],
     );
 
-    // ---------------------------------------------------------------------
     // Vehicle search
-    // ---------------------------------------------------------------------
-
     const handleVehicleSearch = async () => {
         const query = vehicleSearch.trim();
 
@@ -301,10 +301,7 @@ export function JobCardPage() {
         );
     };
 
-    // ---------------------------------------------------------------------
     // Loading / error
-    // ---------------------------------------------------------------------
-
     if (jobLoading) {
         return (
             <div className="p-6">
@@ -335,10 +332,7 @@ export function JobCardPage() {
         );
     }
 
-    // ---------------------------------------------------------------------
     // Derived values
-    // ---------------------------------------------------------------------
-
     const lines = job.lines ?? [];
 
     const total = lines.reduce(
@@ -360,10 +354,7 @@ export function JobCardPage() {
     const defaultLabor = laborPick;
     const defaultPart = partPick;
 
-    // ---------------------------------------------------------------------
     // Handlers
-    // ---------------------------------------------------------------------
-
     const handleAddLabor = async () => {
         const selectedCode = laborPick || catalog?.[0]?.code;
 
@@ -467,41 +458,41 @@ export function JobCardPage() {
         await refetchHistory();
     };
 
-    const handleCompleteJob = async () => {
-        const mileage = Number(finalMileage);
+    // const handleCompleteJob = async () => {
+    //     const mileage = Number(finalMileage);
 
-        if (
-            !Number.isFinite(mileage) ||
-            mileage < 0
-        ) {
-            window.alert(
-                "Please enter a valid final mileage.",
-            );
-            return;
-        }
+    //     if (
+    //         !Number.isFinite(mileage) ||
+    //         mileage < 0
+    //     ) {
+    //         window.alert(
+    //             "Please enter a valid final mileage.",
+    //         );
+    //         return;
+    //     }
 
-        const currentMileage =
-            currentVehicle?.mileage ?? 0;
+    //     const currentMileage =
+    //         currentVehicle?.mileage ?? 0;
 
-        if (
-            currentMileage > 0 &&
-            mileage < currentMileage
-        ) {
-            window.alert(
-                `Final mileage cannot be lower than the current vehicle mileage of ${currentMileage.toLocaleString(
-                    "en-KE",
-                )} km.`,
-            );
-            return;
-        }
+    //     if (
+    //         currentMileage > 0 &&
+    //         mileage < currentMileage
+    //     ) {
+    //         window.alert(
+    //             `Final mileage cannot be lower than the current vehicle mileage of ${currentMileage.toLocaleString(
+    //                 "en-KE",
+    //             )} km.`,
+    //         );
+    //         return;
+    //     }
 
-        await completeJob(mileage);
+    //     await completeJob(mileage);
 
-        await refetchJob();
-        await refetchHistory();
+    //     await refetchJob();
+    //     await refetchHistory();
 
-        navigate("/");
-    };
+    //     navigate("/");
+    // };
 
     const goToCheckout = () => {
         navigate(
@@ -513,19 +504,10 @@ export function JobCardPage() {
         );
     };
 
-    // ---------------------------------------------------------------------
     // Render
-    // ---------------------------------------------------------------------
-
     return (
         <div className="p-6">
-
-            {/* =============================================================
-                HEADER
-            ============================================================= */}
-
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-
                 <Link
                     to="/"
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--text-muted)]"
@@ -593,9 +575,7 @@ export function JobCardPage() {
                 </div>
             </div>
 
-            {/* =============================================================
-                VEHICLE SEARCH
-            ============================================================= */}
+            {/* VEHICLE SEARCH */}
 
             {showVehicleSearch && (
                 <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -762,10 +742,7 @@ export function JobCardPage() {
                 </div>
             )}
 
-            {/* =============================================================
-                JOB HEADER
-            ============================================================= */}
-
+            {/* JOB HEADER */}
             <div className="mb-4">
 
                 <div className="flex items-center gap-2">
@@ -779,9 +756,11 @@ export function JobCardPage() {
                         variant={
                             job.stage === "done"
                                 ? "success"
-                                : job.stage === "parts"
-                                    ? "warning"
-                                    : "default"
+                                : job.stage === "ready"
+                                    ? "success"
+                                    : job.stage === "parts"
+                                        ? "warning"
+                                        : "default"
                         }
                     >
                         {job.stage}
@@ -795,10 +774,7 @@ export function JobCardPage() {
                 </p>
             </div>
 
-            {/* =============================================================
-                CUSTOMER + VEHICLE
-            ============================================================= */}
-
+            {/* CUSTOMER + VEHICLE*/}
             <div className="mb-5 grid gap-4 md:grid-cols-2">
 
                 {/* Customer */}
@@ -841,7 +817,6 @@ export function JobCardPage() {
                 </div>
 
                 {/* Vehicle */}
-
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
 
                     <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
@@ -902,10 +877,7 @@ export function JobCardPage() {
                 </div>
             </div>
 
-            {/* =============================================================
-                MECHANIC + FAULT
-            ============================================================= */}
-
+            {/* MECHANIC + FAULT */}
             <div className="mb-5 flex flex-wrap items-center gap-4">
 
                 <div className="w-56">
@@ -967,10 +939,7 @@ export function JobCardPage() {
                 </div>
             </div>
 
-            {/* =============================================================
-                DIAGNOSIS
-            ============================================================= */}
-
+            {/*  DIAGNOSIS*/}
             {(job.diagnosisNotes ||
                 (job.diagnosisFindings?.length ??
                     0) > 0) && (
@@ -1063,10 +1032,7 @@ export function JobCardPage() {
                 </div>
             )}
 
-            {/* =============================================================
-                LABOR + PARTS
-            ============================================================= */}
-
+            {/* LABOR + PARTS */}
             <div className="mb-5 grid gap-4 md:grid-cols-2">
 
                 {/* Labor */}
@@ -1167,10 +1133,7 @@ export function JobCardPage() {
                 </div>
             </div>
 
-            {/* =============================================================
-                JOB LINES
-            ============================================================= */}
-
+            {/* JOB LINES */}
             <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
                 <ReceiptIcon
                     size={14}
@@ -1228,9 +1191,7 @@ export function JobCardPage() {
                 )}
             />
 
-            {/* =============================================================
-                TOTAL
-            ============================================================= */}
+            {/*  TOTAL */}
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-5">
 
@@ -1264,94 +1225,32 @@ export function JobCardPage() {
                 </Button>
             </div>
 
-            {/* =============================================================
-                COMPLETE REPAIR
-            ============================================================= */}
-
+            {/* COMPLETE REPAIR */}
             {job.stage === "active" && (
-
                 <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-
-                    <div className="mb-4">
-
-                        <h2 className="flex items-center gap-2 text-sm font-bold">
-                            <CheckCircle2
-                                size={14}
-                                className="text-[var(--primary)]"
-                            />
-                            Complete repair
-                        </h2>
-
-                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                            Record the vehicle's
-                            final mileage.
-                            Completing the job
-                            adds it to the
-                            vehicle's permanent
-                            service history.
-                        </p>
-
-                    </div>
-
-                    <div className="flex flex-wrap items-end gap-3">
-
-                        <div>
-
-                            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
-                                Final mileage
-                            </label>
-
-                            <Input
-                                type="number"
-                                min={
-                                    currentVehicle
-                                        ?.mileage ??
-                                    0
-                                }
-                                value={
-                                    finalMileage
-                                }
-                                onChange={(
-                                    event,
-                                ) =>
-                                    setFinalMileage(
-                                        event
-                                            .target
-                                            .value,
-                                    )
-                                }
-                                className="!w-48"
-                            />
-
-                        </div>
-
-                        <Button
-                            variant="primary"
-                            onClick={
-                                handleCompleteJob
-                            }
-                            disabled={
-                                completingJob ||
-                                !finalMileage
-                            }
-                        >
-                            <CheckCircle2
-                                size={13}
-                            />
-
-                            {completingJob
-                                ? "Completing…"
-                                : "Mark ready for pickup"}
-                        </Button>
-
-                    </div>
+                    <h2 className="flex items-center gap-2 text-sm font-bold">
+                        <CheckCircle2 size={14} className="text-[var(--primary)]" />
+                        Ready for pickup
+                    </h2>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        Record the final mileage and notify the customer the vehicle is ready.
+                        The job stays open until checkout — it only closes once paid.
+                    </p>
+                    {/* ...mileage input... */}
+                    <Button variant="primary" onClick={handleMarkReady} disabled={markingReady || !finalMileage}>
+                        <CheckCircle2 size={13} />
+                        {markingReady ? "Notifying…" : "Mark ready for pickup"}
+                    </Button>
                 </div>
             )}
 
-            {/* =============================================================
-                SERVICE HISTORY
-            ============================================================= */}
+            {job.stage === "ready" && (
+                <div className="mt-6 rounded-xl border border-[var(--primary)] bg-[var(--primary-dim)] p-4 text-sm font-semibold text-[var(--primary)]">
+                    Customer notified — awaiting pickup and checkout.
+                </div>
+            )}
 
+            {/* SERVICE HISTORY*/}
             <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
 
                 <div className="flex items-center justify-between">

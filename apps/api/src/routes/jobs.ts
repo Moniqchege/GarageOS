@@ -101,10 +101,6 @@ async function generateJobId() {
     return `JC-${1041 + count}`;
 }
 
-// Recalculates a vehicle's service schedule after a job completes and
-// fires a customer notification with the next due mileage. Used by every
-// route that can mark a job "done" (stage change, close, checkout) so
-// there's a single source of truth for the recalculation + notification.
 async function completeVehicleService(
     tx: Prisma.TransactionClient,
     registration: string,
@@ -398,121 +394,72 @@ jobsRouter.patch("/:id", async (req, res) => {
 });
 
 // PATCH /api/jobs/:id/stage
-jobsRouter.patch(
-    "/:id/stage",
-    async (req, res) => {
-        try {
-            const existing =
-                await prisma.jobCard.findUnique({
-                    where: {
-                        id: req.params.id,
-                    },
-                });
+jobsRouter.patch("/:id/stage", async (req, res) => {
+    try {
+        const existing = await prisma.jobCard.findUnique({
+            where: { id: req.params.id },
+            include: { vehicle: true },
+        });
 
-            if (!existing) {
-                return res.status(404).json({
-                    error: "Job not found",
-                });
-            }
-
-            const validStages: JobStage[] = [
-                "diagnostics",
-                "active",
-                "parts",
-                "done",
-            ];
-
-            const {
-                stage,
-                mileageAtEnd,
-            } =
-                req.body as {
-                    stage: JobStage;
-                    mileageAtEnd?: number;
-                };
-
-            if (
-                !validStages.includes(
-                    stage,
-                )
-            ) {
-                return res.status(400).json({
-                    error: "Invalid stage",
-                });
-            }
-
-            const completing =
-                stage === "done";
-
-            const row =
-                await prisma.$transaction(
-                    async (tx) => {
-                        const updated =
-                            await tx.jobCard.update(
-                                {
-                                    where: {
-                                        id: existing.id,
-                                    },
-
-                                    data: {
-                                        stage,
-
-                                        ...(completing
-                                            ? {
-                                                completedAt:
-                                                    BigInt(
-                                                        Date.now(),
-                                                    ),
-
-                                                ...(mileageAtEnd !=
-                                                    null
-                                                    ? {
-                                                        mileageAtEnd:
-                                                            Number(
-                                                                mileageAtEnd,
-                                                            ),
-                                                    }
-                                                    : {}),
-                                            }
-                                            : {}),
-                                    },
-
-                                    include:
-                                        jobInclude,
-                                },
-                            );
-
-                        if (
-                            completing &&
-                            mileageAtEnd !=
-                            null
-                        ) {
-                            await completeVehicleService(
-                                tx,
-                                existing.registration,
-                                Number(mileageAtEnd),
-                            );
-                        }
-
-                        return updated;
-                    },
-                );
-
-            res.json(
-                toJobCard(row),
-            );
-        } catch (error) {
-            console.error(
-                "PATCH stage failed:",
-                error,
-            );
-
-            res.status(500).json({
-                error: "Failed to update job stage",
-            });
+        if (!existing) {
+            return res.status(404).json({ error: "Job not found" });
         }
-    },
-);
+
+        const validStages: JobStage[] = ["diagnostics", "active", "parts", "ready", "done"];
+
+        const { stage, mileageAtEnd } = req.body as {
+            stage: JobStage;
+            mileageAtEnd?: number;
+        };
+
+        if (!validStages.includes(stage)) {
+            return res.status(400).json({ error: "Invalid stage" });
+        }
+
+        const completing = stage === "done";
+        const becomingReady = stage === "ready" && existing.stage !== "ready";
+
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.jobCard.update({
+                where: { id: existing.id },
+                data: {
+                    stage,
+                    ...(mileageAtEnd != null ? { mileageAtEnd: Number(mileageAtEnd) } : {}),
+                    ...(completing ? { completedAt: BigInt(Date.now()) } : {}),
+                },
+                include: jobInclude,
+            });
+
+            if (completing) {
+                const finalMileage =
+                    mileageAtEnd != null ? Number(mileageAtEnd) : existing.mileageAtEnd;
+
+                if (finalMileage != null) {
+                    await completeVehicleService(tx, existing.registration, finalMileage);
+                }
+            }
+
+            if (becomingReady) {
+                await tx.customerNotification.create({
+                    data: {
+                        customerId: existing.vehicle.customerId,
+                        type: "job_ready",
+                        time: new Date().toISOString(),
+                        title: "Vehicle ready for pickup",
+                        body: `Your vehicle ${existing.registration} is ready for pickup.`,
+                    },
+                });
+            }
+
+            return updated;
+        });
+
+        res.json(toJobCard(row));
+    } catch (error) {
+        console.error("PATCH stage failed:", error);
+        res.status(500).json({ error: "Failed to update job stage" });
+    }
+});
 
 // POST /api/jobs/:id/lines
 jobsRouter.post(
@@ -845,291 +792,115 @@ interface JobCheckoutBody {
     mileageAtEnd?: number;
 }
 
-jobsRouter.post(
-    "/:id/checkout",
-    async (req, res) => {
-        try {
-            const job =
-                await prisma.jobCard.findUnique({
-                    where: {
-                        id: req.params.id,
-                    },
+jobsRouter.post("/:id/checkout", async (req, res) => {
+    try {
+        const job = await prisma.jobCard.findUnique({
+            where: { id: req.params.id },
+            include: { ...jobInclude },
+        });
 
-                    include: {
-                        ...jobInclude,
-                    },
-                });
-
-            if (!job) {
-                return res.status(404).json({
-                    error: "Job not found",
-                });
-            }
-
-            if (job.lines.length === 0) {
-                return res.status(400).json({
-                    error:
-                        "Job card has no line items",
-                });
-            }
-
-            if (
-                job.stage === "done"
-            ) {
-                return res.status(409).json({
-                    error:
-                        "Job has already been completed",
-                });
-            }
-
-            const {
-                method,
-                amountTendered,
-                mpesaRef,
-                mileageAtEnd,
-            } =
-                req.body as JobCheckoutBody;
-
-            if (
-                ![
-                    "cash",
-                    "mpesa",
-                    "card",
-                ].includes(method)
-            ) {
-                return res.status(400).json({
-                    error:
-                        "method must be cash, mpesa, or card",
-                });
-            }
-
-            if (
-                method === "mpesa" &&
-                (!mpesaRef ||
-                    String(
-                        mpesaRef,
-                    ).length < 8)
-            ) {
-                return res.status(400).json({
-                    error:
-                        "A valid M-Pesa reference is required",
-                });
-            }
-
-            const settings =
-                await prisma.businessSettings.findUnique(
-                    {
-                        where: {
-                            id: 1,
-                        },
-                    },
-                );
-
-            const vatRate =
-                settings?.vatRate ??
-                16;
-
-            const subtotal =
-                job.lines.reduce(
-                    (sum, line) =>
-                        sum +
-                        Number(
-                            line.price,
-                        ),
-                    0,
-                );
-
-            const vat = Math.round(
-                subtotal *
-                (vatRate /
-                    100),
-            );
-
-            const total =
-                subtotal + vat;
-
-            const change =
-                method === "cash" &&
-                    amountTendered !=
-                    null
-                    ? Math.max(
-                        0,
-                        Number(
-                            amountTendered,
-                        ) - total,
-                    )
-                    : 0;
-
-            const receipt =
-                await prisma.$transaction(
-                    async (tx) => {
-                        for (const line of job.lines) {
-                            if (
-                                line.type ===
-                                "part" &&
-                                line.sku
-                            ) {
-                                const item =
-                                    await tx.inventoryItem.findUnique(
-                                        {
-                                            where: {
-                                                sku:
-                                                    line.sku,
-                                            },
-                                        },
-                                    );
-
-                                if (
-                                    !item
-                                ) {
-                                    throw new Error(
-                                        `Inventory item ${line.sku} not found`,
-                                    );
-                                }
-
-                                if (
-                                    item.qty <
-                                    1
-                                ) {
-                                    throw new Error(
-                                        `${item.name} is out of stock`,
-                                    );
-                                }
-
-                                await tx.inventoryItem.update(
-                                    {
-                                        where: {
-                                            sku:
-                                                item.sku,
-                                        },
-                                        data: {
-                                            qty: {
-                                                decrement:
-                                                    1,
-                                            },
-                                        },
-                                    },
-                                );
-                            }
-                        }
-
-                        await tx.jobCard.update(
-                            {
-                                where: {
-                                    id: job.id,
-                                },
-
-                                data: {
-                                    stage: "done",
-
-                                    completedAt:
-                                        BigInt(
-                                            Date.now(),
-                                        ),
-
-                                    ...(mileageAtEnd !=
-                                        null
-                                        ? {
-                                            mileageAtEnd:
-                                                Number(
-                                                    mileageAtEnd,
-                                                ),
-                                        }
-                                        : {}),
-                                },
-                            },
-                        );
-
-                        if (
-                            mileageAtEnd !=
-                            null
-                        ) {
-                            await tx.vehicle.update(
-                                {
-                                    where: {
-                                        registration:
-                                            job.registration,
-                                    },
-
-                                    data: {
-                                        mileage:
-                                            Number(
-                                                mileageAtEnd,
-                                            ),
-                                    },
-                                },
-                            );
-                        }
-
-                        return {
-                            id:
-                                "INV-" +
-                                (
-                                    4000 +
-                                    Math.floor(
-                                        Math.random() *
-                                        900,
-                                    )
-                                ),
-
-                            items:
-                                job.lines.map(
-                                    (line) => ({
-                                        sku:
-                                            line.sku ??
-                                            line.name,
-                                        name:
-                                            line.name,
-                                        price:
-                                            line.price,
-                                        qty: 1,
-                                    }),
-                                ),
-
-                            subtotal,
-                            vat,
-                            total,
-                            method,
-
-                            mpesaRef:
-                                mpesaRef ??
-                                null,
-
-                            change,
-
-                            vatReg:
-                                settings?.kra ??
-                                "",
-
-                            paidAt:
-                                new Date().toISOString(),
-
-                            jobId:
-                                job.id,
-
-                            registration:
-                                job.registration,
-                        };
-                    },
-                );
-
-            res.status(201).json(
-                receipt,
-            );
-        } catch (error) {
-            console.error(
-                "POST checkout failed:",
-                error,
-            );
-
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Checkout failed";
-
-            res.status(500).json({
-                error: message,
-            });
+        if (!job) {
+            return res.status(404).json({ error: "Job not found" });
         }
-    },
-);
+
+        if (job.lines.length === 0) {
+            return res.status(400).json({ error: "Job card has no line items" });
+        }
+
+        if (job.stage === "done") {
+            return res.status(409).json({ error: "Job has already been completed" });
+        }
+
+        const { method, amountTendered, mpesaRef, mileageAtEnd } = req.body as JobCheckoutBody;
+
+        if (!["cash", "mpesa", "card"].includes(method)) {
+            return res.status(400).json({ error: "method must be cash, mpesa, or card" });
+        }
+
+        if (method === "mpesa" && (!mpesaRef || String(mpesaRef).length < 8)) {
+            return res.status(400).json({ error: "A valid M-Pesa reference is required" });
+        }
+
+        const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
+        const vatRate = settings?.vatRate ?? 16;
+
+        const subtotal = job.lines.reduce((sum, line) => sum + Number(line.price), 0);
+        const vat = Math.round(subtotal * (vatRate / 100));
+        const total = subtotal + vat;
+
+        const change =
+            method === "cash" && amountTendered != null
+                ? Math.max(0, Number(amountTendered) - total)
+                : 0;
+
+        // Fall back to the mileage already logged when the job was marked
+        // "ready" (or set earlier), in case checkout doesn't pass its own
+        // mileageAtEnd.
+        const finalMileage =
+            mileageAtEnd != null ? Number(mileageAtEnd) : job.mileageAtEnd ?? undefined;
+
+        const receipt = await prisma.$transaction(async (tx) => {
+            for (const line of job.lines) {
+                if (line.type === "part" && line.sku) {
+                    const item = await tx.inventoryItem.findUnique({
+                        where: { sku: line.sku },
+                    });
+
+                    if (!item) {
+                        throw new Error(`Inventory item ${line.sku} not found`);
+                    }
+
+                    if (item.qty < 1) {
+                        throw new Error(`${item.name} is out of stock`);
+                    }
+
+                    await tx.inventoryItem.update({
+                        where: { sku: item.sku },
+                        data: { qty: { decrement: 1 } },
+                    });
+                }
+            }
+
+            await tx.jobCard.update({
+                where: { id: job.id },
+                data: {
+                    stage: "done",
+                    completedAt: BigInt(Date.now()),
+                    ...(finalMileage != null ? { mileageAtEnd: finalMileage } : {}),
+                },
+            });
+
+            if (finalMileage != null) {
+                await completeVehicleService(tx, job.registration, finalMileage);
+            }
+
+            return {
+                id: "INV-" + (4000 + Math.floor(Math.random() * 900)),
+                items: job.lines.map((line) => ({
+                    sku: line.sku ?? line.name,
+                    name: line.name,
+                    price: line.price,
+                    qty: 1,
+                })),
+                subtotal,
+                vat,
+                total,
+                method,
+                mpesaRef: mpesaRef ?? null,
+                change,
+                vatReg: settings?.kra ?? "",
+                paidAt: new Date().toISOString(),
+                jobId: job.id,
+                registration: job.registration,
+            };
+        });
+
+        res.status(201).json(receipt);
+    } catch (error) {
+        console.error("POST checkout failed:", error);
+
+        const message = error instanceof Error ? error.message : "Checkout failed";
+
+        res.status(500).json({ error: message });
+    }
+});

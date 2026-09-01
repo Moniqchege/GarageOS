@@ -2,6 +2,7 @@ export type JobStage =
     | "diagnostics"
     | "active"
     | "parts"
+    | "ready"
     | "done";
 
 export interface Customer {

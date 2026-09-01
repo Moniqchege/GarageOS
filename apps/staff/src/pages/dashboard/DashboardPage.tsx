@@ -11,7 +11,7 @@ const stages: { key: JobStage; label: string }[] = [
     { key: "diagnostics", label: "Awaiting diagnostics" },
     { key: "active",      label: "Active repairs"       },
     { key: "parts",       label: "Pending parts"        },
-    { key: "done",        label: "Ready for pickup"     },
+    { key: "ready",        label: "Ready for pickup"     },
 ];
 const cardDestination = (job: JobCard): { to: string; state?: unknown } => {
     if (job.stage === "diagnostics") return { to: `/jobs/${job.id}/diagnosis` };
