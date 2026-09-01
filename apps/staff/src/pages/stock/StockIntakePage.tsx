@@ -51,15 +51,10 @@ export function StockIntakePage() {
     const [scanNotFound, setScanNotFound] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    // True once the form has been pinned to an existing item, either via
-    // the ?sku= query param (Edit button) or a barcode scan. Prevents the
-    // auto-generated-SKU effect below from overwriting it.
     const prefillApplied = useRef(false);
 
     const list = items ?? [];
 
-    // Edit button on the inventory table links here as /stock/intake?sku=XYZ.
-    // Prefill the same way a barcode scan of an existing SKU would.
     useEffect(() => {
         const skuParam = searchParams.get("sku");
         if (!skuParam || !items || prefillApplied.current) return;
@@ -82,9 +77,6 @@ export function StockIntakePage() {
         }
     }, [searchParams, items]);
 
-    // For a brand-new item, populate the SKU field with the server-generated
-    // preview as soon as it arrives — unless we're already pinned to an
-    // existing item above.
     useEffect(() => {
         if (prefillApplied.current || form.sku) return;
         if (nextSkuData?.sku) {
@@ -155,10 +147,6 @@ export function StockIntakePage() {
                 low: String(existing.low ?? ""),
             });
         } else {
-            // Don't let an unrecognized scanned code become a manually
-            // typed SKU — the backend still owns SKU assignment for new
-            // items, so we just flag it and leave the auto-generated
-            // SKU in place.
             setScanNotFound(true);
         }
 

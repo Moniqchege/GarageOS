@@ -168,3 +168,10 @@ export interface InventoryItem {
     low: number;
     added: string;
 }
+
+export interface LaborCharge {
+    code: string;
+    name: string;
+    category: string;
+    price: number;
+}

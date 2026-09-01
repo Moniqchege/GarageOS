@@ -15,6 +15,7 @@ import { JobCardPage } from "../pages/jobs/JobCardPage";
 import { DiagnosisPage } from "../pages/jobs/DiagnosisPage";
 import { VehicleRegistrationPage } from "../pages/intake/VehicleRegistrationPage";
 import { StockIntakePage } from "../pages/stock/StockIntakePage";
+import { AddLaborChargePage } from "../pages/labor/AddLaborChargePage";
 
 export const router = createBrowserRouter([
     {
@@ -35,7 +36,9 @@ export const router = createBrowserRouter([
             { path: "jobs/:jobId", element: <JobCardPage /> },
             { path: "jobs/:jobId/diagnosis", element: <DiagnosisPage /> },
             { path: "vehicles/register", element: <VehicleRegistrationPage /> },
-            { path: "stock/intake", element: <StockIntakePage /> }
+            { path: "stock/intake", element: <StockIntakePage /> },
+            { path: "labor/new", element: <AddLaborChargePage /> },
+            { path: "labor/:code/edit", element: <AddLaborChargePage /> },
         ],
     },
 ]);
