@@ -21,15 +21,17 @@ model Employee {
 
 // Inventory 
 model InventoryItem {
-  sku   String @id @db.VarChar(20)
-  name  String
-  fits  String
-  cost  Int
-  price Int
-  qty   Int
-  low   Int
-  added String @db.VarChar(20)
+  sku      String @id @db.VarChar(20)
+  name     String
+  fits     String
+  category String @default("Uncategorized")
+  cost     Int
+  price    Int
+  qty      Int
+  low      Int
+  added    String @db.VarChar(20)
 
+  @@index([category])
   @@map("inventory_items")
 }
 

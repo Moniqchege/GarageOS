@@ -158,20 +158,31 @@ export interface ServiceInfoPayload {
     nextServiceKm?: number;
 }
 
-export interface InventoryItem {
-    sku: string;
-    name: string;
-    fits: string;
-    cost: number;
-    price: number;
-    qty: number;
-    low: number;
-    added: string;
-}
-
 export interface LaborCharge {
     code: string;
     name: string;
     category: string;
     price: number;
+}
+
+export const INVENTORY_CATEGORIES = [
+    "Fast Moving Parts",
+    "Engine Oils",
+    "Filters",
+    "Brake Pads",
+    "Electrical Components",
+] as const;
+
+export type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number];
+
+export interface InventoryItem {
+    sku: string;
+    name: string;
+    fits: string;
+    category: string;
+    cost: number;
+    price: number;
+    qty: number;
+    low: number;
+    added: string;
 }

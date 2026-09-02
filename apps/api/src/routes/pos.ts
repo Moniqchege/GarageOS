@@ -3,10 +3,6 @@ import { prisma } from "../db";
 
 export const posRouter = Router();
 
-// ─── Cart (server-side session state — single cashier MVP) ───────────────────
-// Deliberately NOT persisted to MySQL: it's ephemeral, single-session state
-// that's cleared on checkout/cancel. Inventory itself (the thing that
-// matters after the sale) lives in MySQL and is updated below.
 export interface CartLine {
     sku: string;
     name: string;
@@ -15,7 +11,7 @@ export interface CartLine {
 }
 let posCart: CartLine[] = [];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// Helpers 
 
 async function cartSummary() {
     const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
@@ -25,8 +21,6 @@ async function cartSummary() {
     const total = subtotal + vat;
     return { items: posCart, subtotal, vat, total, vatReg: settings?.kra ?? "" };
 }
-
-// ─── Cart ─────────────────────────────────────────────────────────────────────
 
 // GET /api/pos/cart
 posRouter.get("/cart", async (_req, res) => {

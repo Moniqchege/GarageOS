@@ -28,12 +28,16 @@ inventoryRouter.get("/next-sku", async (_req, res) => {
 
 // GET /api/inventory?low=true
 inventoryRouter.get("/", async (req, res) => {
-    const items = await prisma.inventoryItem.findMany({
-        orderBy: { added: "desc" },
-    });
-    const result = req.query.low === "true"
-        ? items.filter((i) => i.qty <= i.low)
-        : items;
+    const items = await prisma.inventoryItem.findMany({ orderBy: { added: "desc" } });
+
+    let result = items;
+    if (req.query.low === "true") {
+        result = result.filter((i) => i.qty <= i.low);
+    }
+    if (typeof req.query.category === "string" && req.query.category !== "all") {
+        result = result.filter((i) => i.category === req.query.category);
+    }
+
     res.json(result);
 });
 
@@ -56,6 +60,7 @@ inventoryRouter.post("/", async (req, res) => {
     const data = {
         name: String(body.name),
         fits: String(body.fits ?? "Universal"),
+        category: String(body.category ?? "Uncategorized"),
         cost: Number(body.cost ?? 0),
         price: Number(body.price ?? 0),
         qty: Number(body.qty ?? 0),
@@ -82,7 +87,7 @@ inventoryRouter.patch("/:sku", async (req, res) => {
     const existing = await prisma.inventoryItem.findUnique({ where: { sku: req.params.sku.toUpperCase() } });
     if (!existing) return res.status(404).json({ error: "Item not found" });
 
-    const allowed: (keyof InventoryItem)[] = ["name", "fits", "cost", "price", "qty", "low"];
+    const allowed: (keyof InventoryItem)[] = ["name", "fits", "category", "cost", "price", "qty", "low"];
     const data: Record<string, unknown> = {};
     for (const key of allowed) {
         if (key in req.body) data[key] = req.body[key as string];

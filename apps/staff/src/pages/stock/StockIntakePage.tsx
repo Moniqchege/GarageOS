@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { inventory, useApi, useMutation } from "@garage/api-client";
 import { Badge, Button, Field, Input, Select } from "@garage/ui";
+import { INVENTORY_CATEGORIES } from "@garage/types";
 
 const currency = (n: number) =>
     "KSh " + Math.round(Number(n) || 0).toLocaleString("en-KE");
@@ -12,6 +13,7 @@ const emptyForm = {
     sku: "",
     name: "",
     fits: "",
+    category: INVENTORY_CATEGORIES[0],
     qty: "",
     supplier: "AutoParts Kenya Ltd",
     cost: "",
@@ -165,6 +167,7 @@ export function StockIntakePage() {
             await addItem({
                 name: form.name.trim() || "Unnamed part",
                 fits: form.fits.trim() || "Universal",
+                category: form.category,
                 cost,
                 price,
                 qty: quantity,
@@ -296,12 +299,12 @@ export function StockIntakePage() {
                                 </div>
 
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                    <Field label={isExisting ? "SKU / part number" : "SKU (auto-generated)"}>
+                                    {/* <Field label={isExisting ? "SKU / part number" : "SKU (auto-generated)"}>
                                         <Input
                                             value={form.sku || "Generating…"}
                                             disabled
                                         />
-                                    </Field>
+                                    </Field> */}
 
                                     <Field label="Part title">
                                         <Input
@@ -310,6 +313,18 @@ export function StockIntakePage() {
                                             placeholder="e.g. Front Brake Pads"
                                             disabled={isExisting}
                                         />
+                                    </Field>
+
+                                    <Field label="Category">
+                                        <Select
+                                            value={form.category}
+                                            onChange={(e) => updateField("category", e.target.value)}
+                                            disabled={isExisting}
+                                        >
+                                            {INVENTORY_CATEGORIES.map((c) => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </Select>
                                     </Field>
 
                                     <Field label="Fits / compatibility">
