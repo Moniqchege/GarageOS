@@ -13,6 +13,7 @@ model Employee {
   role           String
   phone          String
   pin            String  @db.VarChar(4)
+  loginEnabled   Boolean @default(true) @map("login_enabled")
   status         String  @default("Active") @db.VarChar(20)
   lastLogin      String  @map("last_login")
 
@@ -20,7 +21,33 @@ model Employee {
   rate           Int?
   commissionRate Int?    @map("commission_rate")
 
+  compensationHistory CompensationHistory[]
+
   @@map("employees")
+}
+
+// Compensation history — one row per pay change, newest first
+model CompensationHistory {
+  id         Int      @id @default(autoincrement())
+
+  employeeId String   @map("employee_id") @db.VarChar(20)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type String @db.VarChar(30) 
+
+  payMethod      String? @map("pay_method") @db.VarChar(30)
+  rate           Int?
+  commissionRate Int?    @map("commission_rate")
+
+  year  Int?
+  month Int?
+  paid  Boolean?
+
+  effectiveAt DateTime @default(now()) @map("effective_at")
+
+  @@index([employeeId])
+  @@index([employeeId, effectiveAt])
+  @@map("compensation_history")
 }
 
 // Inventory 

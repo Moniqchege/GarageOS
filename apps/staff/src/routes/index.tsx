@@ -34,6 +34,7 @@ export const router = createBrowserRouter([
             { path: "pos/receipt", element: <ReceiptPage /> },
             { path: "employees", element: <EmployeesPage /> },
             { path: "employees/:employeeId", element: <EmployeePage /> },
+            { path: "employees/${employee.id}/edit", element: <EmployeePage /> },
             { path: "payroll", element: <PayrollPage  /> },
             { path: "analytics", element: <AnalyticsPage /> },
             { path: "settings", element: <SettingsPage /> },

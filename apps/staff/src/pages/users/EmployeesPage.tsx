@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import {
     Banknote,
     BriefcaseBusiness,
+    ChevronLeft,
+    ChevronRight,
     Plus,
     Search,
     Users,
@@ -56,7 +58,7 @@ const emptyForm: FormState = {
 };
 
 function formatMoney(value: number) {
-    return `KSh ${Math.round(value).toLocaleString("en-KE")}`;
+    return `KES ${Math.round(value).toLocaleString("en-KE")}`;
 }
 
 function formatPayLabel(employee: {
@@ -92,6 +94,48 @@ function formatPayLabel(employee: {
     }
 
     return parts.join(" · ");
+}
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+type PageNumber = number | "ellipsis";
+
+function getPageNumbers(
+    currentPage: number,
+    totalPages: number,
+): PageNumber[] {
+    if (totalPages <= 7) {
+        return Array.from(
+            { length: totalPages },
+            (_, i) => i + 1,
+        );
+    }
+
+    if (currentPage <= 4) {
+        return [1, 2, 3, 4, 5, "ellipsis", totalPages];
+    }
+
+    if (currentPage >= totalPages - 3) {
+        return [
+            1,
+            "ellipsis",
+            totalPages - 4,
+            totalPages - 3,
+            totalPages - 2,
+            totalPages - 1,
+            totalPages,
+        ];
+    }
+
+    return [
+        1,
+        "ellipsis",
+        currentPage - 1,
+        currentPage,
+        currentPage + 1,
+        "ellipsis",
+        totalPages,
+    ];
 }
 
 export function EmployeesPage() {
@@ -144,6 +188,9 @@ export function EmployeesPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState<FormState>(emptyForm);
 
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
     const list = data ?? [];
 
     const activeCount = list.filter(
@@ -176,7 +223,7 @@ export function EmployeesPage() {
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-
+        
         return list.filter((employee) => {
             const matchesSearch =
                 !q ||
@@ -187,7 +234,7 @@ export function EmployeesPage() {
             const matchesStatus =
                 statusFilter === "All" ||
                 employee.status === statusFilter;
-
+            
             const matchesRole =
                 roleFilter === "All" ||
                 employee.role === roleFilter;
@@ -195,6 +242,35 @@ export function EmployeesPage() {
             return matchesSearch && matchesStatus && matchesRole;
         });
     }, [list, query, statusFilter, roleFilter]);
+    
+    const payrollByEmployee = useMemo(() => {
+        const map = new Map<string, any>();
+
+        for (const record of payrollData ?? []) {
+            map.set(record.employeeId, record);
+        }
+
+        return map;
+    }, [payrollData]);
+    
+    const totalItems = filtered.length;
+    const totalPages = Math.max(
+        1,
+        Math.ceil(totalItems / pageSize),
+    );
+
+    const safePage = Math.min(page, totalPages);
+    const startIndex = (safePage - 1) * pageSize;
+
+    const paginatedEmployees = filtered.slice(
+        startIndex,
+        startIndex + pageSize,
+    );
+
+    const pageNumbers = getPageNumbers(
+        safePage,
+        totalPages,
+    );
 
     const updateForm = <K extends keyof FormState>(
         key: K,
@@ -244,7 +320,7 @@ export function EmployeesPage() {
 
         refetch();
     };
-
+    
     return (
         <div className="p-6">
             {/* Error */}
@@ -317,17 +393,23 @@ export function EmployeesPage() {
                     />
 
                     <Input
-                        className="w-full pl-9"
+                        className="!w-150 pl-9"
                         placeholder="Search by name, employee ID or role"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => {
+                            setQuery(e.target.value);
+                            setPage(1);
+                        }}
                     />
                 </div>
 
                 <Select
-                    className="lg:w-44"
+                    className="lg:w-84"
                     value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
+                    onChange={(e) => {
+                        setRoleFilter(e.target.value);
+                        setPage(1);
+                    }}
                 >
                     <option value="All">
                         All roles
@@ -343,7 +425,7 @@ export function EmployeesPage() {
                     ))}
                 </Select>
 
-                <Select
+                {/* <Select
                     className="lg:w-36"
                     value={statusFilter}
                     onChange={(e) =>
@@ -361,7 +443,7 @@ export function EmployeesPage() {
                     <option value="Suspended">
                         Inactive
                     </option>
-                </Select>
+                </Select> */}
             </div>
 
             {/* Employee table */}
@@ -377,13 +459,6 @@ export function EmployeesPage() {
 
                                 Employee directory
                             </h2>
-
-                            <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                {filtered.length} employee
-                                {filtered.length === 1
-                                    ? ""
-                                    : "s"}
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -399,38 +474,45 @@ export function EmployeesPage() {
                     </div>
                 ) : (
                     <Table
-                        head={[
+                            head={[
+                            "Employee ID",
                             "Employee",
                             "Role",
+                            "Phone Number",
                             "Pay method",
-                            "Current earnings",
+                            "earnings",
                             "Status",
-                            "",
+                            "Actions",
                         ]}
-                        rows={filtered.map((employee) => [
-                            <Link
+                            rows={paginatedEmployees.map((employee) => {
+                                const payrollRecord = payrollByEmployee.get(employee.id);
+                                return [
+                                     <Link
                                 key={`${employee.id}-name`}
                                 to={`/employees/${employee.id}`}
                                 className="block"
                             >
-                                <div className="font-semibold hover:text-[var(--primary)]">
-                                    {employee.name}
-                                </div>
 
                                 <div className="font-mono text-[10px] text-[var(--text-muted)]">
                                     {employee.id}
                                 </div>
                             </Link>,
 
+                            employee.name,
                             employee.role,
+                            employee.phone,
 
                             <span className="text-xs text-[var(--text-muted)]">
                                 {formatPayLabel(employee)}
                             </span>,
 
-                            <span className="text-sm font-semibold">
-                                —
-                            </span>,
+                            <div>
+                                <div className="text-xs text-[var(--text-muted)]">
+                                    {payrollRecord
+                                        ? formatMoney(payrollRecord.earnings ?? 0)
+                                        : "—"}
+                                </div>
+                            </div>,
 
                             <Badge
                                 variant={
@@ -444,7 +526,7 @@ export function EmployeesPage() {
                                     : "Inactive"}
                             </Badge>,
 
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center gap-2">
                                 <Link
                                     to={`/employees/${employee.id}`}
                                     className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-alt)]"
@@ -466,9 +548,112 @@ export function EmployeesPage() {
                                         : "Reactivate"}
                                 </button>
                             </div>,
-                        ])}
+                                ];
+                            })}
                     />
                 )}
+                <div className="flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="text-xs text-[var(--text-muted)]">
+        {totalItems === 0 ? (
+            "No employees"
+        ) : (
+            <>
+                Showing{" "}
+                <span className="font-semibold text-[var(--text)]">
+                    {startIndex + 1}–
+                    {Math.min(
+                        startIndex + pageSize,
+                        totalItems,
+                    )}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-[var(--text)]">
+                    {totalItems}
+                </span>
+            </>
+        )}
+    </div>
+
+    <div className="flex flex-wrap items-center gap-4">
+        {/* Page size */}
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            <span>Items per page:</span>
+
+            <Select
+                value={String(pageSize)}
+                onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                }}
+                className="!h-7 !w-18 !py-0 text-xs"
+            >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                        {size}
+                    </option>
+                ))}
+            </Select>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center gap-1">
+            <button
+                type="button"
+                onClick={() =>
+                    setPage((p) => Math.max(1, p - 1))
+                }
+                disabled={safePage <= 1}
+                aria-label="Previous page"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] transition hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+                <ChevronLeft size={13} />
+            </button>
+
+            {pageNumbers.map((p, idx) =>
+                p === "ellipsis" ? (
+                    <span
+                        key={`ellipsis-${idx}`}
+                        className="px-1 text-xs text-[var(--text-faint)]"
+                    >
+                        …
+                    </span>
+                ) : (
+                    <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p)}
+                        aria-current={
+                            p === safePage
+                                ? "page"
+                                : undefined
+                        }
+                        className={`flex h-7 min-w-[28px] items-center justify-center rounded-md px-1.5 font-mono text-xs font-semibold transition ${
+                            p === safePage
+                                ? "bg-[var(--primary)] text-white"
+                                : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
+                        }`}
+                    >
+                        {p}
+                    </button>
+                ),
+            )}
+
+            <button
+                type="button"
+                onClick={() =>
+                    setPage((p) =>
+                        Math.min(totalPages, p + 1),
+                    )
+                }
+                disabled={safePage >= totalPages}
+                aria-label="Next page"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] transition hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+                <ChevronRight size={13} />
+            </button>
+        </div>
+    </div>
+</div>
             </div>
 
             {/* =====================================================
@@ -607,7 +792,7 @@ export function EmployeesPage() {
                                 form.payMethod ===
                                     "Daily rate + commission") && (
                                 <Field
-                                    label="Daily rate (KSh)"
+                                    label="Daily rate (KES)"
                                     className="mt-3.5"
                                 >
                                     <Input
@@ -629,7 +814,7 @@ export function EmployeesPage() {
 
                             {form.payMethod === "Fixed monthly" && (
                                 <Field
-                                    label="Monthly salary (KSh)"
+                                    label="Monthly salary (KES)"
                                     className="mt-3.5"
                                 >
                                     <Input

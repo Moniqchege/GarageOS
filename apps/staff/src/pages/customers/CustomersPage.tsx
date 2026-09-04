@@ -79,11 +79,12 @@ export function CustomersPage() {
                         head={[
                             "Reg plate",
                             "Customer",
+                            "Phone Number",
                             "Vehicle",
                             "Mileage",
                             "Last service",
                             "Next service",
-                            "",
+                            "Status",
                         ]}
                         rows={filtered.map((c) => [
                             <span className="font-mono font-bold text-[var(--primary)]">
@@ -91,10 +92,8 @@ export function CustomersPage() {
                             </span>,
                             <div>
                                 <div>{c.customer}</div>
-                                <div className="text-[10px] text-[var(--text-faint)]">
-                                    {c.phone}
-                                </div>
                             </div>,
+                            c.phone,
                             c.model,
                             <span className="font-mono">
                                 {c.mileage.toLocaleString()} km

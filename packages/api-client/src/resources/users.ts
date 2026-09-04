@@ -1,7 +1,8 @@
 import { del, get, patch, post } from "../http";
-import type { Employee, PayMethod } from "@garage/types";
+import type { CompensationHistoryEntry, Employee, PayMethod } from "@garage/types";
 
-export interface CreateUserPayload extends Omit<Employee, "id" | "lastLogin"> {
+export interface CreateUserPayload
+    extends Omit<Employee, "id" | "lastLogin" | "loginEnabled" | "hasPin"> {
     pin: string;
     loginEnabled?: boolean;
 }
@@ -25,6 +26,11 @@ export interface EmployeeActivityJob {
     faults: string;
     completedAt: number | null;
     total: number;
+}
+
+export interface UpdateAccessPayload {
+    enabled: boolean;
+    pin?: string;
 }
 
 export const users = {
@@ -54,4 +60,10 @@ export const users = {
 
     remove: (id: string) =>
         del<void>(`/api/users/${id}`),
+
+    getCompensationHistory: (id: string) =>
+        get<CompensationHistoryEntry[]>(`/api/users/${id}/compensation-history`),
+
+    updateAccess: (id: string, data: UpdateAccessPayload) =>
+        patch<Employee>(`/api/users/${id}/access`, data),
 };

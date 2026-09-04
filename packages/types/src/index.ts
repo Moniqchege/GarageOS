@@ -206,11 +206,11 @@ export interface Employee {
     payMethod: PayMethod;
     rate?: number | null;
     commissionRate?: number | null;
+
+    loginEnabled: boolean;
+    hasPin: boolean;
 }
 
-// ─── Payroll ─────────────────────────────────────────────────────────────────
-
-/** One row in the payroll table — one employee for a given month. */
 export interface PayrollRow {
     employeeId: string;
     name: string;
@@ -218,19 +218,13 @@ export interface PayrollRow {
     payMethod: PayMethod;
     rate: number | null;
     commissionRate: number | null;
-    /** Number of job cards completed in the period. */
     jobsCompleted: number;
-    /** Total revenue generated across those jobs (sum of job line prices). */
     laborGenerated: number;
-    /** Calculated earnings for the period based on pay method. */
     earnings: number;
-    /** Whether the period has been marked as paid. */
     paid: boolean;
-    /** Epoch ms when marked paid, or null. */
     paidAt: number | null;
 }
 
-/** Single-employee period summary (used on the employee detail page). */
 export interface EmployeePayPeriod {
     employeeId: string;
     year: number;
@@ -245,7 +239,6 @@ export interface EmployeePayPeriod {
     paidAt: number | null;
 }
 
-/** Response from PATCH mark-paid. */
 export interface MarkPaidResult {
     employeeId: string;
     year: number;
@@ -253,3 +246,21 @@ export interface MarkPaidResult {
     paid: boolean;
     paidAt: number | null;
 }
+
+export type CompensationHistoryEntry =
+    | {
+        id: number;
+        type: "compensation_change";
+        payMethod: PayMethod;
+        rate: number | null;
+        commissionRate: number | null;
+        effectiveAt: number;
+    }
+    | {
+        id: number;
+        type: "payment_status";
+        year: number;
+        month: number;
+        paid: boolean;
+        effectiveAt: number;
+    };

@@ -34,8 +34,6 @@ function payMethodShort(row: PayrollRow): string {
 
 export function PayrollPage() {
     const [monthOffset, setMonthOffset] = useState(0);
-
-    // Derive year + month (1-based) from the offset
     const { year, month, label } = useMemo(() => {
         const d = new Date();
         d.setDate(1);
@@ -85,11 +83,19 @@ export function PayrollPage() {
             {/* Header */}
             <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-xl font-bold">Payroll</h1>
+                    <h1 className="text-xl font-bold text-[var(--text)]">Payroll</h1>
                     <p className="mt-1 text-sm text-[var(--text-muted)]">
                         Track employee earnings, payments and outstanding balances.
                     </p>
                 </div>
+                 <Link
+                to="/employees"
+            >
+                <Button variant="secondary" className="mb-2">
+                    <ArrowLeft size={15} />
+                   Back to Employees
+                </Button>
+            </Link>
             </div>
 
             {/* Period selector */}

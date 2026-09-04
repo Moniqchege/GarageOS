@@ -3,24 +3,12 @@ import { prisma } from "../db";
 
 export const payrollRouter = Router();
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Unix-ms boundaries for a calendar month (local midnight, UTC stored). */
 function monthBounds(year: number, month: number): { from: bigint; to: bigint } {
-    const from = BigInt(Date.UTC(year, month - 1, 1));           // 1st of month 00:00 UTC
-    const to   = BigInt(Date.UTC(year, month, 1));               // 1st of NEXT month 00:00 UTC
+    const from = BigInt(Date.UTC(year, month - 1, 1));           
+    const to   = BigInt(Date.UTC(year, month, 1));           
     return { from, to };
 }
 
-/**
- * Calculate earnings for one employee given their completed jobs in a period.
- *
- * payMethod variants:
- *   Commission            → Σ(job.total × commissionRate / 100)
- *   Daily rate            → distinct working days × rate
- *   Daily rate+commission → daily earnings + commission earnings
- *   Fixed monthly         → rate (flat; independent of jobs)
- */
 function calcEarnings(
     employee: {
         payMethod: string;
@@ -38,7 +26,6 @@ function calcEarnings(
 
     const dailyEarnings = () => {
         if (!rate) return 0;
-        // count distinct calendar days (UTC date string YYYY-MM-DD)
         const days = new Set(
             jobs
                 .filter((j) => j.completedAt != null)
@@ -64,8 +51,7 @@ function calcEarnings(
     }
 }
 
-// ─── GET /api/payroll?year=&month= ──────────────────────────────────────────
-// Returns a payroll summary row for every active employee for the given month.
+//  GET /api/payroll?year=&month= 
 payrollRouter.get("/", async (req, res) => {
     const year  = parseInt(req.query.year  as string);
     const month = parseInt(req.query.month as string);
@@ -76,10 +62,8 @@ payrollRouter.get("/", async (req, res) => {
 
     const { from, to } = monthBounds(year, month);
 
-    // Fetch all employees
     const employees = await prisma.employee.findMany({ orderBy: { id: "asc" } });
 
-    // Fetch all completed job cards in this month
     const allJobs = await prisma.jobCard.findMany({
         where: {
             stage: "done",
@@ -88,7 +72,6 @@ payrollRouter.get("/", async (req, res) => {
         include: { lines: true },
     });
 
-    // Fetch existing PayPeriod records for this month
     const periods = await prisma.payPeriod.findMany({
         where: { year, month },
     });
@@ -125,8 +108,7 @@ payrollRouter.get("/", async (req, res) => {
     res.json(rows);
 });
 
-// ─── GET /api/payroll/:employeeId?year=&month= ───────────────────────────────
-// Single-employee period summary (used on EmployeePage overview).
+//  GET /api/payroll/:employeeId?year=&month= 
 payrollRouter.get("/:employeeId", async (req, res) => {
     const { employeeId } = req.params;
     const year  = parseInt(req.query.year  as string);
@@ -176,11 +158,10 @@ payrollRouter.get("/:employeeId", async (req, res) => {
     });
 });
 
-// ─── PATCH /api/payroll/:employeeId/mark-paid ────────────────────────────────
-// Marks (or unmarks) a pay period as paid. Does NOT wire money anywhere.
+//  PATCH /api/payroll/:employeeId/mark-paid 
 payrollRouter.patch("/:employeeId/mark-paid", async (req, res) => {
     const { employeeId } = req.params;
-    const year  = parseInt(req.query.year  as string);
+    const year = parseInt(req.query.year as string);
     const month = parseInt(req.query.month as string);
 
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -190,23 +171,42 @@ payrollRouter.patch("/:employeeId/mark-paid", async (req, res) => {
     const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
     if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-    // Allow toggling: body may include { paid: false } to unmark
     const paid: boolean = req.body?.paid !== false;
     const paidAt = paid ? BigInt(Date.now()) : null;
 
-    const period = await prisma.payPeriod.upsert({
-        where: {
-            employeeId_year_month: { employeeId: emp.id, year, month },
-        },
-        create: { employeeId: emp.id, year, month, paid, paidAt },
-        update: { paid, paidAt },
+    const existingPeriod = await prisma.payPeriod.findUnique({
+        where: { employeeId_year_month: { employeeId: emp.id, year, month } },
     });
+    const changed = (existingPeriod?.paid ?? false) !== paid;
+
+    const [period] = await prisma.$transaction([
+        prisma.payPeriod.upsert({
+            where: {
+                employeeId_year_month: { employeeId: emp.id, year, month },
+            },
+            create: { employeeId: emp.id, year, month, paid, paidAt },
+            update: { paid, paidAt },
+        }),
+        ...(changed
+            ? [
+                prisma.compensationHistory.create({
+                    data: {
+                        employeeId: emp.id,
+                        type: "payment_status",
+                        year,
+                        month,
+                        paid,
+                    },
+                }),
+            ]
+            : []),
+    ]);
 
     res.json({
-        employeeId:  period.employeeId,
-        year:        period.year,
-        month:       period.month,
-        paid:        period.paid,
-        paidAt:      period.paidAt != null ? Number(period.paidAt) : null,
+        employeeId: period.employeeId,
+        year: period.year,
+        month: period.month,
+        paid: period.paid,
+        paidAt: period.paidAt != null ? Number(period.paidAt) : null,
     });
 });
