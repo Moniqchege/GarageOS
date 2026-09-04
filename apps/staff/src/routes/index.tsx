@@ -8,7 +8,6 @@ import { LaborChargesPage } from "../pages/labor/LaborChargesPage";
 import { PosPage } from "../pages/pos/PosPage";
 import { CheckoutPage } from "../pages/pos/CheckoutPage";
 import { ReceiptPage } from "../pages/pos/ReceiptPage";
-import { UsersPage } from "../pages/users/UsersPage";
 import { AnalyticsPage } from "../pages/analytics/AnalyticsPage";
 import { SettingsPage } from "../pages/settings/SettingsPage";
 import { JobCardPage } from "../pages/jobs/JobCardPage";
@@ -16,6 +15,9 @@ import { DiagnosisPage } from "../pages/jobs/DiagnosisPage";
 import { VehicleRegistrationPage } from "../pages/intake/VehicleRegistrationPage";
 import { StockIntakePage } from "../pages/stock/StockIntakePage";
 import { AddLaborChargePage } from "../pages/labor/AddLaborChargePage";
+import { EmployeesPage } from "../pages/users/EmployeesPage";
+import { EmployeePage } from "../pages/users/EmployeePage";
+import { PayrollPage } from "../pages/users/PayrollPage";
 
 export const router = createBrowserRouter([
     {
@@ -30,7 +32,9 @@ export const router = createBrowserRouter([
             { path: "pos", element: <PosPage /> },
             { path: "pos/checkout", element: <CheckoutPage /> },
             { path: "pos/receipt", element: <ReceiptPage /> },
-            { path: "users", element: <UsersPage /> },
+            { path: "employees", element: <EmployeesPage /> },
+            { path: "employees/:employeeId", element: <EmployeePage /> },
+            { path: "payroll", element: <PayrollPage  /> },
             { path: "analytics", element: <AnalyticsPage /> },
             { path: "settings", element: <SettingsPage /> },
             { path: "jobs/:jobId", element: <JobCardPage /> },

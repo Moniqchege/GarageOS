@@ -80,7 +80,7 @@ const navigation: NavigationGroup[] = [
                 label: "Team",
                 // title: "Staff Profiles & Permission Matrix",
                 title: "",
-                path: "/users",
+                path: "/employees",
                 icon: Users,
             },
             {

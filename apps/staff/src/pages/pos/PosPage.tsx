@@ -495,16 +495,24 @@ export function PosPage() {
                                 {visibleProducts.map((product) => {
                                     const outOfStock = product.qty <= 0;
                                     return (
-                                        <div
+                                        <button
                                             key={product.sku}
+                                            type="button"
+                                            onClick={() => handleAddToCart(product.sku)}
+                                            disabled={outOfStock}
+                                            aria-label={
+                                                outOfStock
+                                                    ? `${product.name} is out of stock`
+                                                    : `Add ${product.name} to sale`
+                                            }
                                             className={[
-                                                "group relative flex flex-col gap-3 rounded-lg border p-2",
+                                                "group relative flex flex-col gap-3 rounded-lg border p-2 text-left",
                                                 "bg-[var(--surface)] transition-all duration-300",
                                                 outOfStock
-                                                    ? "border-[var(--border)] opacity-60"
-                                                    : "border-[var(--border)] hover:shadow-md",
+                                                    ? "cursor-not-allowed border-[var(--border)] opacity-60"
+                                                    : "border-[var(--border)] hover:-translate-y-0.5 hover:border-[var(--primary)]/50 hover:shadow-md active:scale-[0.98]",
                                             ].join(" ")}
-                                        >                                           
+                                        >
                                             {/* SKU + stock badge */}
                                             <div className="ml-2 flex items-start justify-between gap-2">
                                                 <div className="font-mono text-[9px] tracking-wide text-[var(--text-faint)]">
@@ -516,9 +524,9 @@ export function PosPage() {
                                                         Out of stock
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center gap-1 rounded-full bg-[var(--success)]/10 px-2 py-0.5 text-[9px] font-semibold text-[var(--success)]">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-                                                        {product.qty} available
+                                                        <div className="flex items-center gap-1 rounded-full bg-[var(--success)]/10 px-2 py-0.5 text-[9px] font-semibold text-[var(--success)]">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+                                                            {product.qty} available
                                                     </div>
                                                 )}
                                             </div>
@@ -531,21 +539,19 @@ export function PosPage() {
                                                     {product.name}
                                                 </div>
                                             </div>
-
-                                            {/* Price + add button */}
+                                            {/* Price */}
                                             <div className="ml-2 mt-auto flex items-center justify-between border-t border-[var(--border)] pt-3">
-    <div className="text-[9px] uppercase tracking-wider text-[var(--text-faint)]">
-        Unit price
-    </div>
-
-    <div className="font-mono text-sm font-bold text-[var(--primary)]">
-        {currency(product.price)}
-    </div>
-</div>
-                                        </div>
+                                                <div className="text-[9px] uppercase tracking-wider text-[var(--text-faint)]">
+                                                    Unit price
+                                                </div>
+                                                <div className="font-mono text-sm font-bold text-[var(--primary)]">
+                                                    {currency(product.price)}
+                                                </div>
+                                            </div>
+                                        </button>
                                     );
                                 })}
-                        </div>
+                            </div>
                     )}
                 </section>
             </main>
