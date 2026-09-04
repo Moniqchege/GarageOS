@@ -13,6 +13,7 @@ import { posRouter } from "./routes/pos";
 import { usersRouter } from "./routes/users";
 import { analyticsRouter } from "./routes/analytics";
 import { settingsRouter } from "./routes/settings";
+import { payrollRouter } from "./routes/payroll";
 
 export function createApp() {
     const app = express();
@@ -47,6 +48,7 @@ export function createApp() {
     app.use("/api/users", usersRouter);
     app.use("/api/analytics", analyticsRouter);
     app.use("/api/settings", settingsRouter);
+    app.use("/api/payroll", payrollRouter);
 
     // ─── 404 Handler ─────────────────────────────────────────────────────────────
     app.use((_req, res) => {

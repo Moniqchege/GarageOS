@@ -9,7 +9,7 @@ import {
     X,
 } from "lucide-react";
 
-import { users, useApi, useMutation } from "@garage/api-client";
+import { users, payroll, useApi, useMutation } from "@garage/api-client";
 import type { PayMethod } from "@garage/types";
 import {
     Badge,
@@ -156,11 +156,23 @@ export function EmployeesPage() {
             employee.payMethod === "Daily rate + commission",
     ).length;
 
-    /*
-     * UI placeholder until payroll data exists.
-     * This should eventually come from the payroll API.
-     */
-    const outstandingPayroll = 0;
+    const { year, month } = useMemo(() => {
+        const d = new Date();
+        return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    }, []);
+
+    const { data: payrollData } = useApi(
+        () => payroll.getPeriod(year, month),
+        [year, month],
+    );
+
+    const outstandingPayroll = useMemo(() => {
+        if (!payrollData) return 0;
+        return payrollData.reduce(
+            (sum, r) => sum + (r.paid ? 0 : r.earnings),
+            0,
+        );
+    }, [payrollData]);
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();

@@ -207,3 +207,49 @@ export interface Employee {
     rate?: number | null;
     commissionRate?: number | null;
 }
+
+// ─── Payroll ─────────────────────────────────────────────────────────────────
+
+/** One row in the payroll table — one employee for a given month. */
+export interface PayrollRow {
+    employeeId: string;
+    name: string;
+    role: string;
+    payMethod: PayMethod;
+    rate: number | null;
+    commissionRate: number | null;
+    /** Number of job cards completed in the period. */
+    jobsCompleted: number;
+    /** Total revenue generated across those jobs (sum of job line prices). */
+    laborGenerated: number;
+    /** Calculated earnings for the period based on pay method. */
+    earnings: number;
+    /** Whether the period has been marked as paid. */
+    paid: boolean;
+    /** Epoch ms when marked paid, or null. */
+    paidAt: number | null;
+}
+
+/** Single-employee period summary (used on the employee detail page). */
+export interface EmployeePayPeriod {
+    employeeId: string;
+    year: number;
+    month: number;
+    payMethod: PayMethod;
+    rate: number | null;
+    commissionRate: number | null;
+    jobsCompleted: number;
+    laborGenerated: number;
+    earnings: number;
+    paid: boolean;
+    paidAt: number | null;
+}
+
+/** Response from PATCH mark-paid. */
+export interface MarkPaidResult {
+    employeeId: string;
+    year: number;
+    month: number;
+    paid: boolean;
+    paidAt: number | null;
+}

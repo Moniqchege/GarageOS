@@ -15,6 +15,7 @@ export { labor } from "./resources/labor";
 export { pos } from "./resources/pos";
 export { users } from "./resources/users";
 export { analytics } from "./resources/analytics";
+export { payroll } from "./resources/payroll";
 
 // Resource-specific payload / response types
 export type { LoginResponse, BusinessSettings } from "./resources/auth";

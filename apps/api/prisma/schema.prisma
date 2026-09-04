@@ -158,6 +158,22 @@ model CustomerNotification {
   @@map("customer_notifications")
 }
 
+// Payroll pay periods — one record per employee per calendar month
+model PayPeriod {
+  id         Int      @id @default(autoincrement())
+
+  employeeId String   @map("employee_id") @db.VarChar(20)
+  year       Int
+  month      Int      // 1–12
+
+  paid       Boolean  @default(false)
+  paidAt     BigInt?  @map("paid_at")   // epoch ms when marked paid
+
+  @@unique([employeeId, year, month])
+  @@index([year, month])
+  @@map("pay_periods")
+}
+
 // Business settings 
 model BusinessSettings {
   id      Int    @id @default(1)

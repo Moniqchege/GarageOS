@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
     ArrowLeft,
@@ -14,7 +14,7 @@ import {
     Wrench,
 } from "lucide-react";
 
-import { users, useApi, useMutation } from "@garage/api-client";
+import { users, payroll, useApi, useMutation } from "@garage/api-client";
 import type { EmployeeActivityJob } from "@garage/api-client";
 import { Badge, Button, Field, Input, Select } from "@garage/ui";
 
@@ -184,6 +184,30 @@ export function EmployeePage() {
 function OverviewTab({ employee }: { employee: any }) {
     const payLabel = formatPayLabel(employee);
 
+    // Current calendar month
+    const { year, month } = useMemo(() => {
+        const d = new Date();
+        return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    }, []);
+
+    const {
+        data: period,
+        loading: periodLoading,
+        refetch: refetchPeriod,
+    } = useApi(
+        () => payroll.getEmployeePeriod(employee.id, year, month),
+        [employee.id, year, month],
+    );
+
+    const { mutate: togglePaid, loading: markingPaid } = useMutation(() =>
+        payroll.markPaid(employee.id, year, month, !period?.paid),
+    );
+
+    const handleMarkPaid = async () => {
+        await togglePaid();
+        refetchPeriod();
+    };
+
     return (
         <div className="grid gap-5 lg:grid-cols-3">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 lg:col-span-2">
@@ -194,104 +218,141 @@ function OverviewTab({ employee }: { employee: any }) {
 
                 <div className="grid gap-5 sm:grid-cols-2">
                     <InfoItem label="Full name" value={employee.name} />
-
-                    <InfoItem
-                        label="Employee ID"
-                        value={employee.id}
-                        mono
-                    />
-
-                    <InfoItem
-                        label="Phone"
-                        value={employee.phone || "—"}
-                    />
-
-                    <InfoItem
-                        label="Role"
-                        value={employee.role}
-                    />
+                    <InfoItem label="Employee ID" value={employee.id} mono />
+                    <InfoItem label="Phone" value={employee.phone || "—"} />
+                    <InfoItem label="Role" value={employee.role} />
                 </div>
             </div>
 
+            {/* Current pay card */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-                <SectionTitle
-                    icon={<Wallet size={15} />}
-                    title="Current pay"
-                />
-
-                <div className="text-sm text-[var(--text-muted)]">
-                    Pay method
+                <SectionTitle icon={<Wallet size={15} />} title="Current pay" />
+                {/* Pay method + Monthly earnings */}
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {/* Pay method */}
+                    <div>
+                        <div className="text-sm text-[var(--text-muted)]">
+                            Pay method
+                        </div>
+                        <div className="text-base font-bold">
+                            {employee.payMethod ?? "Not configured"}
+                        </div>
+                        {payLabel && (
+                            <div className="text-xs text-[var(--text-muted)]">
+                                {payLabel}
+                            </div>
+                        )}
+                    </div>
+                    {/* This month's earnings */}
+                    <div>
+                        <div className="text-sm text-[var(--text-muted)]">
+                            This month's earnings
+                        </div>
+                        <div className="text-[var(--primary)] font-bold">
+                            {periodLoading
+                                ? "—"
+                                : formatMoney(period?.earnings ?? 0)}
+                        </div>
+                    </div>
                 </div>
-
-                <div className="mt-1 text-base font-bold">
-                    {employee.payMethod ?? "Not configured"}
-                </div>
-
-                {payLabel && (
-                    <div className="mt-1 text-xs text-[var(--text-muted)]">
-                        {payLabel}
+                {/* Full-width payment action */}
+                {period && (
+                    <div className="mt-5 w-full">
+                        {period.paid ? (
+                            <button
+                                onClick={handleMarkPaid}
+                                disabled={markingPaid}
+                                className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--background)] disabled:opacity-50"
+                            >
+                                {markingPaid ? "…" : "Unmark as paid"}
+                            </button>
+                        ) : (
+                                <button
+                                    onClick={handleMarkPaid}
+                                    disabled={
+                                        markingPaid ||
+                                        period.earnings === 0
+                                    }
+                                    className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
+                                >
+                                    {markingPaid ? "…" : "Mark as paid"}
+                            </button>
+                        )}
                     </div>
                 )}
-
-                <div className="mt-5 text-sm text-[var(--text-muted)]">
-                    Current earnings
-                </div>
-
-                <div className="mt-1 text-2xl font-bold">
-                    —
-                </div>
-
                 <Link
                     to="/payroll"
                     className="mt-5 inline-flex text-xs font-semibold text-[var(--primary)] hover:underline"
                 >
-                    View payroll →
+                    View full payroll →
                 </Link>
             </div>
 
+            {/* This period summary */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 lg:col-span-2">
                 <SectionTitle
                     icon={<BriefcaseBusiness size={15} />}
                     title="This period"
                 />
 
-                <div className="grid gap-4 sm:grid-cols-4">
-                    <Metric label="Jobs completed" value="—" />
+                {periodLoading ? (
+                    <div className="grid gap-4 sm:grid-cols-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div
+                                key={i}
+                                className="h-12 animate-pulse rounded bg-[var(--surface-alt)]"
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-4">
+                        <Metric
+                            label="Jobs completed"
+                            value={String(period?.jobsCompleted ?? 0)}
+                        />
+                        <Metric
+                            label="Labor generated"
+                            value={formatMoney(period?.laborGenerated ?? 0)}
+                        />
+                        <Metric
+                            label="Earned"
+                            value={formatMoney(period?.earnings ?? 0)}
+                        />
+                        <Metric
+                            label="Status"
+                            value={
+                                <Badge variant={period?.paid ? "success" : "warning"}>
+                                    {period?.paid ? "Paid ✓" : "Pending"}
+                                </Badge>
+                            }
+                        />
+                    </div>
+                )}
 
-                    <Metric label="Labor generated" value="—" />
-
-                    <Metric label="Earned" value="—" />
-
-                    <Metric label="Paid" value="—" />
-                </div>
+                {/* Fixed monthly note */}
+                {employee.payMethod === "Fixed monthly" && (
+                    <p className="mt-4 text-xs text-[var(--text-muted)]">
+                        Fixed monthly salary of{" "}
+                        <span className="font-semibold">
+                            {formatMoney(employee.rate ?? 0)}
+                        </span>
+                        . Earnings are the same each month regardless of jobs completed.
+                    </p>
+                )}
             </div>
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-                <SectionTitle
-                    icon={<KeyRound size={15} />}
-                    title="System access"
-                />
+                <SectionTitle icon={<KeyRound size={15} />} title="System access" />
 
                 <div className="flex items-center justify-between">
-                    <span className="text-sm">
-                        Login access
-                    </span>
-
+                    <span className="text-sm">Login access</span>
                     <Badge variant="success">Enabled</Badge>
                 </div>
 
-                <div className="mt-4 text-xs text-[var(--text-muted)]">
-                    Last login
-                </div>
+                <div className="mt-4 text-xs text-[var(--text-muted)]">Last login</div>
+                <div className="mt-1 text-sm">{employee.lastLogin || "Never"}</div>
 
-                <div className="mt-1 text-sm">
-                    {employee.lastLogin || "Never"}
-                </div>
-
-                <Button
-                    variant="secondary"
-                    className="mt-4 w-full justify-center"
-                >
+                <Button variant="secondary" className="mt-4 w-full justify-center">
                     Manage access
                 </Button>
             </div>
@@ -674,7 +735,7 @@ function Metric({
     value,
 }: {
     label: string;
-    value: string;
+    value: React.ReactNode;
 }) {
     return (
         <div>
@@ -682,7 +743,7 @@ function Metric({
                 {label}
             </div>
 
-            <div className="mt-1 text-lg font-bold">
+            <div className="mt-1 text-sm font-bold">
                 {value}
             </div>
         </div>
