@@ -333,14 +333,14 @@ export function ReceiptPage() {
 
                                             <div className="space-y-0.5">
                                                 <div className="flex justify-between">
-                                                    <span>Subtotal</span>
+                                                    <span>Subtotal (ex-VAT)</span>
                                                     <span>
                                                         {fmt(subtotal)}
                                                     </span>
                                                 </div>
 
                                                 <div className="flex justify-between">
-                                                    <span>VAT 16%</span>
+                                                    <span>VAT 16% (incl.)</span>
                                                     <span>{fmt(vat)}</span>
                                                 </div>
 

@@ -4,15 +4,18 @@ import {
     ArrowLeft,
     Banknote,
     BriefcaseBusiness,
+    Car,
     Clock3,
     History,
     KeyRound,
     Phone,
     User,
     Wallet,
+    Wrench,
 } from "lucide-react";
 
-import { users, useApi } from "@garage/api-client";
+import { users, useApi, useMutation } from "@garage/api-client";
+import type { EmployeeActivityJob } from "@garage/api-client";
 import { Badge, Button, Field, Input, Select } from "@garage/ui";
 
 const PAY_METHODS = [
@@ -78,14 +81,15 @@ export function EmployeePage() {
     const employee = data;
 
     return (
-        <div className="p-6">
+        <div className="p-4">
             {/* Breadcrumb */}
             <Link
                 to="/employees"
-                className="mb-5 inline-flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
             >
-                <ArrowLeft size={15} />
-                Employees
+                <Button variant="secondary" className="mb-2">
+                    <ArrowLeft size={15} />
+                    Employees
+                </Button>
             </Link>
 
             {/* Employee header */}
@@ -132,7 +136,7 @@ export function EmployeePage() {
 
                     <Link to={`/employees/${employee.id}/edit`}>
                         <Button variant="secondary">
-                            Edit employee
+                            Edit Employee
                         </Button>
                     </Link>
                 </div>
@@ -165,9 +169,9 @@ export function EmployeePage() {
             {tab === "overview" && (
                 <OverviewTab employee={employee} />
             )}
-
+            
             {tab === "compensation" && (
-                <CompensationTab employee={employee} />
+                <CompensationTab employee={employee} refetch={refetch} />
             )}
 
             {tab === "activity" && (
@@ -178,6 +182,8 @@ export function EmployeePage() {
 }
 
 function OverviewTab({ employee }: { employee: any }) {
+    const payLabel = formatPayLabel(employee);
+
     return (
         <div className="grid gap-5 lg:grid-cols-3">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 lg:col-span-2">
@@ -218,8 +224,14 @@ function OverviewTab({ employee }: { employee: any }) {
                 </div>
 
                 <div className="mt-1 text-base font-bold">
-                    Not configured
+                    {employee.payMethod ?? "Not configured"}
                 </div>
+
+                {payLabel && (
+                    <div className="mt-1 text-xs text-[var(--text-muted)]">
+                        {payLabel}
+                    </div>
+                )}
 
                 <div className="mt-5 text-sm text-[var(--text-muted)]">
                     Current earnings
@@ -287,10 +299,84 @@ function OverviewTab({ employee }: { employee: any }) {
     );
 }
 
-function CompensationTab({ employee }: { employee: any }) {
-    const [payMethod, setPayMethod] = useState("Commission");
-    const [rate, setRate] = useState("");
-    const [commissionRate, setCommissionRate] = useState("");
+function formatPayLabel(employee: any): string | null {
+    const { payMethod, rate, commissionRate } = employee;
+
+    if (!payMethod) return null;
+
+    const parts: string[] = [];
+
+    if (
+        (payMethod === "Daily rate" ||
+            payMethod === "Daily rate + commission") &&
+        rate != null
+    ) {
+        parts.push(`${formatMoney(rate)}/day`);
+    }
+
+    if (payMethod === "Fixed monthly" && rate != null) {
+        parts.push(`${formatMoney(rate)}/month`);
+    }
+
+    if (
+        (payMethod === "Commission" ||
+            payMethod === "Daily rate + commission") &&
+        commissionRate != null
+    ) {
+        parts.push(`${commissionRate}% commission`);
+    }
+
+    return parts.length ? parts.join(" · ") : null;
+}
+
+function CompensationTab({
+    employee,
+    refetch,
+}: {
+    employee: any;
+    refetch: () => void;
+}) {
+    const [payMethod, setPayMethod] = useState<string>(
+        employee.payMethod ?? "Commission",
+    );
+    const [rate, setRate] = useState(
+        employee.rate != null ? String(employee.rate) : "",
+    );
+    const [commissionRate, setCommissionRate] = useState(
+        employee.commissionRate != null
+            ? String(employee.commissionRate)
+            : "",
+    );
+    const [saved, setSaved] = useState(false);
+
+    const { mutate: saveCompensation, loading: saving, error } = useMutation(
+        () =>
+            users.updateCompensation(employee.id, {
+                payMethod: payMethod as any,
+                rate:
+                    payMethod === "Daily rate" ||
+                    payMethod === "Daily rate + commission" ||
+                    payMethod === "Fixed monthly"
+                        ? rate
+                            ? Number(rate)
+                            : null
+                        : null,
+                commissionRate:
+                    payMethod === "Commission" ||
+                    payMethod === "Daily rate + commission"
+                        ? commissionRate
+                            ? Number(commissionRate)
+                            : null
+                        : null,
+            }),
+    );
+
+    const handleSave = async () => {
+        setSaved(false);
+        await saveCompensation();
+        setSaved(true);
+        refetch();
+    };
 
     return (
         <div className="max-w-3xl">
@@ -305,12 +391,19 @@ function CompensationTab({ employee }: { employee: any }) {
                     by payroll when calculating earnings.
                 </p>
 
+                {error && (
+                    <div className="mb-4 rounded-lg border border-[var(--danger)] bg-[var(--danger-dim)] px-3 py-2 text-xs text-[var(--danger)]">
+                        {error}
+                    </div>
+                )}
+
                 <Field label="Pay method">
                     <Select
                         value={payMethod}
-                        onChange={(e) =>
-                            setPayMethod(e.target.value)
-                        }
+                        onChange={(e) => {
+                            setPayMethod(e.target.value);
+                            setSaved(false);
+                        }}
                     >
                         {PAY_METHODS.map((method) => (
                             <option key={method}>
@@ -327,10 +420,12 @@ function CompensationTab({ employee }: { employee: any }) {
                         className="mt-4"
                     >
                         <Input
+                            inputMode="decimal"
                             value={rate}
-                            onChange={(e) =>
-                                setRate(e.target.value)
-                            }
+                            onChange={(e) => {
+                                setRate(e.target.value.replace(/[^\d.]/g, ""));
+                                setSaved(false);
+                            }}
                             placeholder="e.g. 1,500"
                         />
                     </Field>
@@ -342,37 +437,50 @@ function CompensationTab({ employee }: { employee: any }) {
                         className="mt-4"
                     >
                         <Input
+                            inputMode="decimal"
                             value={rate}
-                            onChange={(e) =>
-                                setRate(e.target.value)
-                            }
+                            onChange={(e) => {
+                                setRate(e.target.value.replace(/[^\d.]/g, ""));
+                                setSaved(false);
+                            }}
                             placeholder="e.g. 35,000"
                         />
                     </Field>
                 )}
 
                 {(payMethod === "Commission" ||
-                    payMethod ===
-                        "Daily rate + commission") && (
+                    payMethod === "Daily rate + commission") && (
                     <Field
                         label="Commission rate (%)"
                         className="mt-4"
                     >
                         <Input
+                            inputMode="decimal"
                             value={commissionRate}
-                            onChange={(e) =>
+                            onChange={(e) => {
                                 setCommissionRate(
-                                    e.target.value,
-                                )
-                            }
+                                    e.target.value.replace(/[^\d.]/g, ""),
+                                );
+                                setSaved(false);
+                            }}
                             placeholder="e.g. 20"
                         />
                     </Field>
                 )}
 
-                <div className="mt-7 flex justify-end">
-                    <Button variant="primary">
-                        Save compensation
+                <div className="mt-7 flex items-center justify-end gap-3">
+                    {saved && !saving && (
+                        <span className="text-xs font-medium text-[var(--primary)]">
+                            Saved
+                        </span>
+                    )}
+
+                    <Button
+                        variant="primary"
+                        onClick={handleSave}
+                        disabled={saving}
+                    >
+                        {saving ? "Saving…" : "Save compensation"}
                     </Button>
                 </div>
             </div>
@@ -392,66 +500,128 @@ function CompensationTab({ employee }: { employee: any }) {
 }
 
 function ActivityTab({ employee }: { employee: any }) {
+    const { data: activity, loading, error } = useApi(
+        () => users.getActivity(employee.id),
+        [employee.id],
+    );
+
+    const formatDate = (ts: number | null) => {
+        if (!ts) return "—";
+        return new Date(ts).toLocaleDateString("en-KE", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
+    };
+
+    const formatMoney = (n: number) =>
+        `KSh ${Math.round(n).toLocaleString("en-KE")}`;
+
     return (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
             <div className="border-b border-[var(--border)] p-5">
                 <SectionTitle
                     icon={<Clock3 size={15} />}
-                    title="Activity"
+                    title="Job Activity"
                 />
+                <p className="text-xs text-[var(--text-muted)]">
+                    Completed job cards assigned to {employee.name}.
+                </p>
+            </div>
 
-                <div className="mt-4 flex gap-2">
-                    {["All", "Jobs", "Payments", "System"].map(
-                        (filter) => (
-                            <button
-                                key={filter}
-                                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-alt)]"
-                            >
-                                {filter}
-                            </button>
-                        ),
-                    )}
+            {loading && (
+                <div className="space-y-3 p-5">
+                    {[1, 2, 3].map((i) => (
+                        <div
+                            key={i}
+                            className="h-14 animate-pulse rounded-lg bg-[var(--surface-alt)]"
+                        />
+                    ))}
                 </div>
-            </div>
+            )}
 
-            <div className="divide-y divide-[var(--border)]">
-                <ActivityRow
-                    time="Today, 09:42"
-                    title="Activity will appear here"
-                    description="Job, payment and system activity for this employee will be displayed here."
-                />
-            </div>
+            {error && (
+                <div className="p-5 text-sm text-[var(--danger)]">
+                    Failed to load activity — {error}
+                </div>
+            )}
+
+            {!loading && !error && (!activity || activity.length === 0) && (
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                    <Wrench size={28} className="text-[var(--text-muted)]" />
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                        No completed jobs yet
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                        Completed job cards assigned to this employee will appear here.
+                    </p>
+                </div>
+            )}
+
+            {!loading && activity && activity.length > 0 && (
+                <div className="divide-y divide-[var(--border)]">
+                    {activity.map((job) => (
+                        <ActivityRow
+                            key={job.id}
+                            job={job}
+                            formatDate={formatDate}
+                            formatMoney={formatMoney}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
 
 function ActivityRow({
-    time,
-    title,
-    description,
+    job,
+    formatDate,
+    formatMoney,
 }: {
-    time: string;
-    title: string;
-    description: string;
+    job: EmployeeActivityJob;
+    formatDate: (ts: number | null) => string;
+    formatMoney: (n: number) => string;
 }) {
     return (
-        <div className="flex gap-4 p-5">
-            <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+        <Link
+            to={`/jobs/${job.id}`}
+            className="flex items-start gap-4 p-5 transition hover:bg-[var(--surface-alt)]"
+        >
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--secondary-dim)] text-[var(--secondary)]">
+                <Wrench size={13} />
+            </div>
 
-            <div>
-                <div className="text-sm font-semibold">
-                    {title}
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                    <span className="text-sm font-semibold text-[var(--text)]">
+                        {job.id}
+                    </span>
+                    <span className="text-xs font-semibold text-[var(--secondary)]">
+                        {formatMoney(job.total)}
+                    </span>
                 </div>
 
-                <div className="mt-1 text-xs text-[var(--text-muted)]">
-                    {description}
+                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                    <Car size={11} />
+                    <span>{job.vehicle}</span>
+                    {job.customer && (
+                        <>
+                            <span>·</span>
+                            <span>{job.customer}</span>
+                        </>
+                    )}
                 </div>
 
-                <div className="mt-2 text-[10px] text-[var(--text-muted)]">
-                    {time}
+                <div className="mt-1 line-clamp-1 text-xs text-[var(--text-muted)]">
+                    {job.faults}
+                </div>
+
+                <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+                    Completed {formatDate(job.completedAt)}
                 </div>
             </div>
-        </div>
+        </Link>
     );
 }
 

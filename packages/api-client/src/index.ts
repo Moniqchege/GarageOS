@@ -20,7 +20,7 @@ export { analytics } from "./resources/analytics";
 export type { LoginResponse, BusinessSettings } from "./resources/auth";
 export type { RestockPayload } from "./resources/inventory";
 export type { CartLine, Cart, CheckoutPayload, Receipt } from "./resources/pos";
-export type { CreateUserPayload, UpdatePinPayload } from "./resources/users";
+export type { CreateUserPayload, UpdatePinPayload, EmployeeActivityJob } from "./resources/users";
 export type {
     AnalyticsSummary,
     JobRevenueEntry,

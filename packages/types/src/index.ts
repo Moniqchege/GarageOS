@@ -186,3 +186,24 @@ export interface InventoryItem {
     low: number;
     added: string;
 }
+
+export type EmployeeStatus = "Active" | "Suspended";
+
+export type PayMethod =
+    | "Commission"
+    | "Daily rate"
+    | "Daily rate + commission"
+    | "Fixed monthly";
+
+export interface Employee {
+    id: string;
+    name: string;
+    role: string;
+    phone: string;
+    status: EmployeeStatus;
+    lastLogin: string;
+
+    payMethod: PayMethod;
+    rate?: number | null;
+    commissionRate?: number | null;
+}

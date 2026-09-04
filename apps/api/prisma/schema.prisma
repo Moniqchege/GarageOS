@@ -8,13 +8,17 @@ datasource db {
 
 // Employees
 model Employee {
-  id        String @id @db.VarChar(20)
-  name      String
-  role      String
-  phone     String
-  pin       String @db.VarChar(4)
-  status    String @default("Active") @db.VarChar(20)
-  lastLogin String @map("last_login")
+  id             String  @id @db.VarChar(20)
+  name           String
+  role           String
+  phone          String
+  pin            String  @db.VarChar(4)
+  status         String  @default("Active") @db.VarChar(20)
+  lastLogin      String  @map("last_login")
+
+  payMethod      String  @default("Commission") @map("pay_method") @db.VarChar(30)
+  rate           Int?
+  commissionRate Int?    @map("commission_rate")
 
   @@map("employees")
 }

@@ -234,7 +234,7 @@ export function JobCardPage() {
             (users ?? [])
                 .filter(
                     (user) =>
-                        user.role === "Lead Mechanic" &&
+                        (user.role === "Mechanic" || user.role === "Lead Mechanic") &&
                         user.status === "Active",
                 )
                 .map((user) => user.name),
@@ -1202,7 +1202,7 @@ export function JobCardPage() {
                 </div>
 
                 <div className="text-sm text-[var(--text-muted)]">
-                    Job total
+                    Job total (VAT incl.)
                 </div>
 
                 <div className="font-mono text-2xl font-bold text-[var(--primary)]">

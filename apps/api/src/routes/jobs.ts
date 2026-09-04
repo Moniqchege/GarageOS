@@ -824,9 +824,10 @@ jobsRouter.post("/:id/checkout", async (req, res) => {
         const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
         const vatRate = settings?.vatRate ?? 16;
 
-        const subtotal = job.lines.reduce((sum, line) => sum + Number(line.price), 0);
-        const vat = Math.round(subtotal * (vatRate / 100));
-        const total = subtotal + vat;
+        // Prices are VAT-inclusive. Back-calculate VAT from the inclusive total.
+        const total = job.lines.reduce((sum, line) => sum + Number(line.price), 0);
+        const vat = Math.round(total - total / (1 + vatRate / 100));
+        const subtotal = total - vat;
 
         const change =
             method === "cash" && amountTendered != null

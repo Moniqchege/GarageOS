@@ -16,9 +16,12 @@ let posCart: CartLine[] = [];
 async function cartSummary() {
     const settings = await prisma.businessSettings.findUnique({ where: { id: 1 } });
     const vatRate = settings?.vatRate ?? 16;
-    const subtotal = posCart.reduce((s, c) => s + c.price * c.qty, 0);
-    const vat = Math.round(subtotal * (vatRate / 100));
-    const total = subtotal + vat;
+
+    // Prices are VAT-inclusive. Back-calculate VAT from the inclusive total.
+    const total = posCart.reduce((s, c) => s + c.price * c.qty, 0);
+    const vat = Math.round(total - total / (1 + vatRate / 100));
+    const subtotal = total - vat;
+
     return { items: posCart, subtotal, vat, total, vatReg: settings?.kra ?? "" };
 }
 

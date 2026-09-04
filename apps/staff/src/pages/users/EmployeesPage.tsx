@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { users, useApi, useMutation } from "@garage/api-client";
+import type { PayMethod } from "@garage/types";
 import {
     Badge,
     Button,
@@ -21,13 +22,11 @@ import {
 
 const SYSTEM_ROLES = [
     "System Administrator",
-    "Storekeeper",
-    "Service Advisor",
     "Lead Mechanic",
-    "Terminal Cashier",
+    "Mechanic",
 ];
 
-const PAY_METHODS = [
+const PAY_METHODS: PayMethod[] = [
     "Commission",
     "Daily rate",
     "Daily rate + commission",
@@ -39,7 +38,7 @@ type FormState = {
     phone: string;
     role: string;
     pin: string;
-    payMethod: string;
+    payMethod: PayMethod;
     rate: string;
     commissionRate: string;
     loginEnabled: boolean;
@@ -60,6 +59,41 @@ function formatMoney(value: number) {
     return `KSh ${Math.round(value).toLocaleString("en-KE")}`;
 }
 
+function formatPayLabel(employee: {
+    payMethod?: string;
+    rate?: number | null;
+    commissionRate?: number | null;
+}): string {
+    const { payMethod, rate, commissionRate } = employee;
+
+    if (!payMethod) return "Not configured";
+
+    const parts: string[] = [payMethod];
+
+    if (
+        (payMethod === "Daily rate" ||
+            payMethod === "Daily rate + commission" ||
+            payMethod === "Fixed monthly") &&
+        rate != null
+    ) {
+        parts.push(
+            payMethod === "Fixed monthly"
+                ? `${formatMoney(rate)}/mo`
+                : `${formatMoney(rate)}/day`,
+        );
+    }
+
+    if (
+        (payMethod === "Commission" ||
+            payMethod === "Daily rate + commission") &&
+        commissionRate != null
+    ) {
+        parts.push(`${commissionRate}%`);
+    }
+
+    return parts.join(" · ");
+}
+
 export function EmployeesPage() {
     const { data, loading, error, refetch } = useApi(
         () => users.list(),
@@ -73,7 +107,24 @@ export function EmployeesPage() {
                 role: form.role,
                 phone: form.phone,
                 pin: form.loginEnabled ? form.pin : "",
+                loginEnabled: form.loginEnabled,
                 status: "Active",
+                payMethod: form.payMethod,
+                rate:
+                    form.payMethod === "Daily rate" ||
+                    form.payMethod === "Daily rate + commission" ||
+                    form.payMethod === "Fixed monthly"
+                        ? form.rate
+                            ? Number(form.rate)
+                            : null
+                        : null,
+                commissionRate:
+                    form.payMethod === "Commission" ||
+                    form.payMethod === "Daily rate + commission"
+                        ? form.commissionRate
+                            ? Number(form.commissionRate)
+                            : null
+                        : null,
             }),
     );
 
@@ -95,15 +146,19 @@ export function EmployeesPage() {
 
     const list = data ?? [];
 
-    const activeCount = list.filter((e) => e.status === "Active").length;
+    const activeCount = list.filter(
+        (employee) => employee.status === "Active",
+    ).length;
 
-    const commissionCount = list.filter((e) =>
-        e.role.toLowerCase().includes("mechanic"),
+    const commissionCount = list.filter(
+        (employee) =>
+            employee.payMethod === "Commission" ||
+            employee.payMethod === "Daily rate + commission",
     ).length;
 
     /*
-     * This is intentionally a UI placeholder until payroll data exists.
-     * Later this should come from the payroll API rather than employees.
+     * UI placeholder until payroll data exists.
+     * This should eventually come from the payroll API.
      */
     const outstandingPayroll = 0;
 
@@ -139,6 +194,18 @@ export function EmployeesPage() {
         }));
     };
 
+    const openCreate = () => {
+        setForm(emptyForm);
+        setShowCreate(true);
+    };
+
+    const closeCreate = () => {
+        if (saving) return;
+
+        setShowCreate(false);
+        setForm(emptyForm);
+    };
+
     const save = async () => {
         if (!form.name.trim()) return;
 
@@ -157,7 +224,10 @@ export function EmployeesPage() {
     ) => {
         await toggleStatus({
             id,
-            status: current === "Active" ? "Suspended" : "Active",
+            status:
+                current === "Active"
+                    ? "Suspended"
+                    : "Active",
         });
 
         refetch();
@@ -165,6 +235,7 @@ export function EmployeesPage() {
 
     return (
         <div className="p-6">
+            {/* Error */}
             {error && (
                 <div className="mb-5 rounded-lg border border-[var(--danger)] bg-[var(--danger-dim)] px-4 py-3 text-sm text-[var(--danger)]">
                     {error} —{" "}
@@ -191,7 +262,7 @@ export function EmployeesPage() {
 
                 <Button
                     variant="primary"
-                    onClick={() => setShowCreate(true)}
+                    onClick={openCreate}
                 >
                     <Plus size={15} />
                     Add employee
@@ -246,10 +317,15 @@ export function EmployeesPage() {
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value)}
                 >
-                    <option value="All">All roles</option>
+                    <option value="All">
+                        All roles
+                    </option>
 
                     {SYSTEM_ROLES.map((role) => (
-                        <option key={role} value={role}>
+                        <option
+                            key={role}
+                            value={role}
+                        >
                             {role}
                         </option>
                     ))}
@@ -258,11 +334,21 @@ export function EmployeesPage() {
                 <Select
                     className="lg:w-36"
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) =>
+                        setStatusFilter(e.target.value)
+                    }
                 >
-                    <option value="All">All status</option>
-                    <option value="Active">Active</option>
-                    <option value="Suspended">Inactive</option>
+                    <option value="All">
+                        All status
+                    </option>
+
+                    <option value="Active">
+                        Active
+                    </option>
+
+                    <option value="Suspended">
+                        Inactive
+                    </option>
                 </Select>
             </div>
 
@@ -276,12 +362,15 @@ export function EmployeesPage() {
                                     size={15}
                                     className="text-[var(--primary)]"
                                 />
+
                                 Employee directory
                             </h2>
 
                             <p className="mt-1 text-xs text-[var(--text-muted)]">
                                 {filtered.length} employee
-                                {filtered.length === 1 ? "" : "s"}
+                                {filtered.length === 1
+                                    ? ""
+                                    : "s"}
                             </p>
                         </div>
                     </div>
@@ -324,7 +413,7 @@ export function EmployeesPage() {
                             employee.role,
 
                             <span className="text-xs text-[var(--text-muted)]">
-                                Not configured
+                                {formatPayLabel(employee)}
                             </span>,
 
                             <span className="text-sm font-semibold">
@@ -370,19 +459,36 @@ export function EmployeesPage() {
                 )}
             </div>
 
-            {/* Create employee drawer */}
+            {/* =====================================================
+                CREATE EMPLOYEE MODAL
+               ===================================================== */}
             {showCreate && (
-                <div className="fixed inset-0 z-50">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="create-employee-title"
+                >
+                    {/* Backdrop */}
                     <button
+                        type="button"
                         aria-label="Close"
-                        className="absolute inset-0 bg-black/30"
-                        onClick={() => setShowCreate(false)}
+                        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+                        onClick={closeCreate}
                     />
 
-                    <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-[var(--border)] bg-[var(--surface)] shadow-xl">
-                        <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+                    {/* Centered modal */}
+                    <div
+                        className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal header */}
+                        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-6 py-4">
                             <div>
-                                <h2 className="text-sm font-bold">
+                                <h2
+                                    id="create-employee-title"
+                                    className="text-base font-bold text-[var(--text)]"
+                                >
                                     New employee
                                 </h2>
 
@@ -392,20 +498,26 @@ export function EmployeesPage() {
                             </div>
 
                             <button
-                                onClick={() => setShowCreate(false)}
-                                className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-alt)]"
+                                type="button"
+                                onClick={closeCreate}
+                                disabled={saving}
+                                aria-label="Close dialog"
+                                className="rounded-lg p-2 text-[var(--text-muted)] transition hover:bg-[var(--surface-alt)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <X size={17} />
                             </button>
                         </div>
 
-                        <div className="p-5">
+                        {/* Modal body */}
+                        <div className="overflow-y-auto px-6 py-5">
+                            {/* Personal information */}
                             <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                                 Personal information
                             </h3>
 
                             <Field label="Full employee name">
                                 <Input
+                                    autoFocus
                                     value={form.name}
                                     onChange={(e) =>
                                         updateForm(
@@ -417,7 +529,10 @@ export function EmployeesPage() {
                                 />
                             </Field>
 
-                            <Field label="Phone number" className="mt-3.5">
+                            <Field
+                                label="Phone number"
+                                className="mt-3.5"
+                            >
                                 <Input
                                     value={form.phone}
                                     onChange={(e) =>
@@ -430,7 +545,10 @@ export function EmployeesPage() {
                                 />
                             </Field>
 
-                            <Field label="Role" className="mt-3.5">
+                            <Field
+                                label="Role"
+                                className="mt-3.5"
+                            >
                                 <Select
                                     value={form.role}
                                     onChange={(e) =>
@@ -448,6 +566,7 @@ export function EmployeesPage() {
                                 </Select>
                             </Field>
 
+                            {/* Compensation */}
                             <div className="my-6 border-t border-[var(--border)]" />
 
                             <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
@@ -460,7 +579,7 @@ export function EmployeesPage() {
                                     onChange={(e) =>
                                         updateForm(
                                             "payMethod",
-                                            e.target.value,
+                                            e.target.value as PayMethod,
                                         )
                                     }
                                 >
@@ -542,6 +661,7 @@ export function EmployeesPage() {
                                 </Field>
                             )}
 
+                            {/* System access */}
                             <div className="my-6 border-t border-[var(--border)]" />
 
                             <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
@@ -595,36 +715,36 @@ export function EmployeesPage() {
                                     />
                                 </Field>
                             )}
-
-                            <div className="mt-7 flex gap-2">
-                                <Button
-                                    variant="secondary"
-                                    onClick={() =>
-                                        setShowCreate(false)
-                                    }
-                                    className="flex-1 justify-center"
-                                >
-                                    Cancel
-                                </Button>
-
-                                <Button
-                                    variant="primary"
-                                    onClick={save}
-                                    disabled={
-                                        saving ||
-                                        !form.name.trim() ||
-                                        (form.loginEnabled &&
-                                            form.pin.length !== 4)
-                                    }
-                                    className="flex-1 justify-center"
-                                >
-                                    {saving
-                                        ? "Creating…"
-                                        : "Create employee"}
-                                </Button>
-                            </div>
                         </div>
-                    </aside>
+
+                        {/* Modal footer */}
+                        <div className="flex shrink-0 gap-3 border-t border-[var(--border)] px-6 py-4">
+                            <Button
+                                variant="secondary"
+                                onClick={closeCreate}
+                                disabled={saving}
+                                className="flex-1 justify-center"
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                variant="primary"
+                                onClick={save}
+                                disabled={
+                                    saving ||
+                                    !form.name.trim() ||
+                                    (form.loginEnabled &&
+                                        form.pin.length !== 4)
+                                }
+                                className="flex-1 justify-center"
+                            >
+                                {saving
+                                    ? "Creating…"
+                                    : "Create employee"}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -647,10 +767,14 @@ function StatCard({
                     {icon}
                 </span>
 
-                <span className="text-xs font-medium">{label}</span>
+                <span className="text-xs font-medium">
+                    {label}
+                </span>
             </div>
 
-            <div className="text-xl font-bold">{value}</div>
+            <div className="text-xl font-bold">
+                {value}
+            </div>
         </div>
     );
 }

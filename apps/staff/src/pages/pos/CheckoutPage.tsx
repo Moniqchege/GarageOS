@@ -262,7 +262,7 @@ export function CheckoutPage() {
                             <div className="border-t border-[var(--border)] px-4 py-3">
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                                        <span>Subtotal</span>
+                                        <span>Subtotal (ex-VAT)</span>
 
                                         <span className="font-mono">
                                             {currency(subtotal)}
@@ -270,7 +270,7 @@ export function CheckoutPage() {
                                     </div>
 
                                     <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                                        <span>VAT</span>
+                                        <span>VAT (incl.)</span>
 
                                         <span className="font-mono">
                                             {currency(vat)}
@@ -285,7 +285,7 @@ export function CheckoutPage() {
                                         </div>
 
                                         <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                                            Amount payable
+                                            VAT inclusive
                                         </div>
                                     </div>
 
